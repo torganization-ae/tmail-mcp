@@ -12,9 +12,6 @@ bun.lock
 bun.lockb
 yarn.lock
 
-# Generated OpenAPI types (dev-only, optional)
-src/schemas/generated/
-
 # Removed from package — dev-only or inlined
 scripts/
 openapi/

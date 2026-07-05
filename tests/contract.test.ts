@@ -1,43 +1,42 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import {
-  buildE2EEGenerateBody,
-  e2eeRegisterBody,
-  generateE2EEKeyPairLocal,
-  validateE2EEGenerateBody,
-} from '../src/crypto/e2ee-local.js';
-import { toolContracts } from '../src/schemas/tools.zod.js';
+import { toolInputSchemas } from '../src/schemas/tools.zod.js';
 
-describe('contract', () => {
-  it('tool contracts matrix', () => {
-    const contracts = toolContracts();
-    expect(contracts.length).toBe(23);
-    const seen = Object.fromEntries(contracts.map((c) => [c.name, c.path]));
-    expect(seen.tmail_e2ee_generate).toBe('/api/tbox/keys/generate');
-    expect(seen.tmail_e2ee_generate_local).toBe('/api/tbox/keys');
+const coverage = JSON.parse(
+  fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../subagent-coverage.json'), 'utf8'),
+) as { tools: Array<{ mcp_tool: string; path?: string; disposition?: string }> };
+
+describe('subagent-coverage.json', () => {
+  it('catalog lists blocked server-side E2EE generate', () => {
+    const entry = coverage.tools.find((t) => t.mcp_tool === 'tmail_e2ee_generate');
+    expect(entry?.disposition).toBe('mcp_tool_blocked');
+    expect(entry?.path).toBe('/api/tbox/keys/generate');
   });
 
-  it('build E2EE generate body', () => {
-    const body = buildE2EEGenerateBody('my-secure-passphrase-16', true);
-    expect(body.acknowledge_server_side_risk).toBe(true);
-    expect(body.register).toBe(true);
-    expect(() => validateE2EEGenerateBody('short', true)).toThrow();
-  });
-
-  it('E2EE register body mapping', () => {
-    const pub = 'dGVzdC1wdWJsaWMta2V5LXRlc3Qta2V5LXRlc3Q=';
-    const body = e2eeRegisterBody(pub);
-    expect(body.pub_key_e2e).toBe(pub);
-    expect(body).not.toHaveProperty('pub_key_base64');
+  it('local keygen maps to PUT /api/tbox/keys', () => {
+    const entry = coverage.tools.find((t) => t.mcp_tool === 'tmail_e2ee_generate_local');
+    expect(entry?.path).toBe('/api/tbox/keys');
   });
 });
 
-describe('tools.lock.json alignment', () => {
-  it('registry exposes 27 MCP tools', async () => {
+describe('tool schemas', () => {
+  it('every registered MCP tool has a zod input schema', async () => {
+    const { TOOL_SPECS } = await import('../src/tools/registry.js');
+    for (const spec of TOOL_SPECS) {
+      expect(toolInputSchemas[spec.name], spec.name).toBeDefined();
+    }
+  });
+});
+
+describe('registry', () => {
+  it('exposes 27 MCP tools', async () => {
     const { TOOL_SPECS } = await import('../src/tools/registry.js');
     expect(TOOL_SPECS.length).toBe(27);
   });
 
-  it('tmail_e2ee_generate is not registered as MCP tool', async () => {
+  it('does not register tmail_e2ee_generate', async () => {
     const { TOOL_SPECS } = await import('../src/tools/registry.js');
     expect(TOOL_SPECS.some((t) => t.name === 'tmail_e2ee_generate')).toBe(false);
   });

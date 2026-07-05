@@ -1,6 +1,6 @@
 {
   "name": "@tmail/mcp",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "TMail MCP Server — Model Context Protocol server for TMail agent mail API",
   "license": "MIT",
   "type": "module",
@@ -15,10 +15,10 @@
     "README.md"
   ],
   "scripts": {
-    "preinstall": "only-allow npm",
     "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.check.json && rolldown -c rolldown.config.js",
     "test": "vitest run",
-    "prepublishOnly": "npm run build && npm test"
+    "check": "npm run build && npm test",
+    "prepublishOnly": "npm run check"
   },
   "allowScripts": {
     "esbuild@0.28.1": true
@@ -57,9 +57,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "only-allow": "^1.2.2",
     "rolldown": "^1.0.0-beta.30",
-    "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
   }

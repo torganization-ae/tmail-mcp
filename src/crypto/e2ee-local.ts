@@ -33,31 +33,6 @@ export async function generateE2EEKeyPairLocal(passphrase: string): Promise<Reco
   };
 }
 
-export function buildE2EEGenerateBody(passphrase: string, register: boolean): Record<string, unknown> {
-  return {
-    passphrase,
-    acknowledge_server_side_risk: true,
-    register,
-  };
-}
-
-export function validateE2EEGenerateBody(passphrase: string, register: boolean): void {
-  if (passphrase.length < 16) {
-    throw new Error('passphrase too short');
-  }
-  const body = buildE2EEGenerateBody(passphrase, register);
-  if (body.acknowledge_server_side_risk !== true) {
-    throw new Error('acknowledge_server_side_risk must be true');
-  }
-  if (!('register' in body)) {
-    throw new Error('register missing');
-  }
-}
-
-export function e2eeRegisterBody(pubKeyBase64: string): Record<string, unknown> {
-  return { pub_key_e2e: pubKeyBase64 };
-}
-
 export function unlockPrivateKey(
   encPrivKeyBase64: string,
   saltBase64: string,
