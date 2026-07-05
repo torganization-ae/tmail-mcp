@@ -1,0 +1,352 @@
+{
+  "tools": [
+    {
+      "mcp_tool": "tmail_gate_check",
+      "disposition": "local_only",
+      "gate_category": "local"
+    },
+    {
+      "mcp_tool": "tmail_list_wallets",
+      "disposition": "local_only",
+      "gate_category": "local"
+    },
+    {
+      "mcp_tool": "tmail_auth_status",
+      "disposition": "mcp_tool",
+      "gate_category": "setup_auth",
+      "scope": "mail:read",
+      "method": "GET",
+      "path": "/api/tbox/limits",
+      "operation_id": "tbox-get-limits"
+    },
+    {
+      "mcp_tool": "tmail_generate_payload",
+      "disposition": "mcp_tool",
+      "gate_category": "setup_auth",
+      "method": "POST",
+      "path": "/api/auth/generate-payload",
+      "operation_id": "generate-payload"
+    },
+    {
+      "mcp_tool": "tmail_sub_bind",
+      "disposition": "mcp_tool",
+      "gate_category": "setup_auth",
+      "method": "POST",
+      "path": "/api/subacc/auth/bind",
+      "operation_id": "subaccount-bind"
+    },
+    {
+      "mcp_tool": "tmail_sub_login",
+      "disposition": "mcp_tool",
+      "gate_category": "setup_auth",
+      "method": "POST",
+      "path": "/api/subacc/auth/login",
+      "operation_id": "subaccount-login"
+    },
+    {
+      "mcp_tool": "tmail_list_mailboxes",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mailbox:read",
+      "method": "POST",
+      "path": "/api/tbox/mailboxes",
+      "operation_id": "tbox-list-mailboxes"
+    },
+    {
+      "mcp_tool": "tmail_get_limits",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mail:read",
+      "method": "GET",
+      "path": "/api/tbox/limits",
+      "operation_id": "tbox-get-limits"
+    },
+    {
+      "mcp_tool": "tmail_list_threads",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mail:read",
+      "method": "POST",
+      "path": "/api/tbox/threads",
+      "operation_id": "tbox-list-threads"
+    },
+    {
+      "mcp_tool": "tmail_fetch_thread",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mail:read",
+      "method": "POST",
+      "path": "/api/tbox/threads/letters",
+      "operation_id": "tbox-fetch-thread-letters"
+    },
+    {
+      "mcp_tool": "tmail_send_letter",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mail:send",
+      "method": "POST",
+      "path": "/api/tbox/letters",
+      "operation_id": "tbox-send-letter"
+    },
+    {
+      "mcp_tool": "tmail_webhook_set",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "webhook:manage",
+      "method": "PUT",
+      "path": "/api/tbox/webhook",
+      "operation_id": "tbox-set-webhook"
+    },
+    {
+      "mcp_tool": "tmail_webhook_get",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "webhook:manage",
+      "method": "GET",
+      "path": "/api/tbox/webhook",
+      "operation_id": "tbox-get-webhook"
+    },
+    {
+      "mcp_tool": "tmail_webhook_delete",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "webhook:manage",
+      "method": "DELETE",
+      "path": "/api/tbox/webhook",
+      "operation_id": "tbox-delete-webhook"
+    },
+    {
+      "mcp_tool": "tmail_webhook_rotate_secret",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "webhook:manage",
+      "method": "POST",
+      "path": "/api/tbox/webhook/rotate-secret",
+      "operation_id": "tbox-rotate-webhook-secret"
+    },
+    {
+      "mcp_tool": "tmail_e2ee_generate",
+      "disposition": "mcp_tool_blocked",
+      "gate_category": "setup_auth",
+      "scope": "e2ee:manage",
+      "method": "POST",
+      "path": "/api/tbox/keys/generate",
+      "operation_id": "tbox-generate-key-pair",
+      "notes": "Blocked in MCP — use tmail_e2ee_generate_local"
+    },
+    {
+      "mcp_tool": "tmail_e2ee_generate_local",
+      "disposition": "mcp_tool",
+      "gate_category": "setup_auth",
+      "scope": "e2ee:manage",
+      "method": "PUT",
+      "path": "/api/tbox/keys",
+      "operation_id": "tbox-update-pub-key",
+      "notes": "Client-side keygen; auto-generates passphrase if store empty; optional register via PUT /api/tbox/keys"
+    },
+    {
+      "mcp_tool": "tmail_e2ee_passphrase_status",
+      "disposition": "mcp_tool",
+      "gate_category": "setup_auth",
+      "scope": "e2ee:manage",
+      "notes": "Passphrase metadata only — no secret value"
+    },
+    {
+      "mcp_tool": "tmail_e2ee_passphrase_reveal",
+      "disposition": "human_only",
+      "gate_category": "human_only",
+      "notes": "Blocked for agents — use CLI: npx @tmail/mcp e2ee-passphrase reveal"
+    },
+    {
+      "mcp_tool": "tmail_e2ee_change_passphrase",
+      "disposition": "human_only",
+      "gate_category": "human_only",
+      "notes": "Blocked for agents — use CLI: npx @tmail/mcp e2ee-passphrase set"
+    },
+    {
+      "mcp_tool": "tmail_e2ee_register",
+      "disposition": "mcp_tool",
+      "gate_category": "setup_auth",
+      "scope": "e2ee:manage",
+      "method": "PUT",
+      "path": "/api/tbox/keys",
+      "operation_id": "tbox-update-pub-key"
+    },
+    {
+      "mcp_tool": "tmail_e2ee_get",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "e2ee:manage",
+      "method": "GET",
+      "path": "/api/tbox/keys",
+      "operation_id": "tbox-get-pub-key"
+    },
+    {
+      "mcp_tool": "tmail_e2ee_lookup",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "e2ee:manage",
+      "method": "POST",
+      "path": "/api/tbox/keys/lookup",
+      "operation_id": "tbox-lookup-pub-keys"
+    },
+    {
+      "mcp_tool": "tmail_nft_quote_mint",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mailbox:read",
+      "method": "POST",
+      "path": "/api/nft/provide-mint",
+      "operation_id": "nft-provide-mint",
+      "response_policy": "strip_transactions"
+    },
+    {
+      "mcp_tool": "tmail_nft_prepare_mint",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mailbox:read",
+      "method": "POST",
+      "path": "/api/nft/provide-mint",
+      "operation_id": "nft-provide-mint",
+      "response_policy": "full_with_transactions",
+      "requires": ["user_confirmed", "expected_total_nano"]
+    },
+    {
+      "mcp_tool": "tmail_fetch_letters",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mail:read",
+      "method": "POST",
+      "path": "/api/tbox/letters/fetch",
+      "operation_id": "tbox-fetch-letters"
+    },
+    {
+      "mcp_tool": "tmail_list_folders",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mail:read",
+      "method": "POST",
+      "path": "/api/tbox/folders",
+      "operation_id": "tbox-list-folders"
+    },
+    {
+      "mcp_tool": "tmail_mark_threads_seen",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mail:write",
+      "method": "POST",
+      "path": "/api/tbox/threads/seen",
+      "operation_id": "tbox-mark-threads-seen"
+    }
+  ],
+  "excluded": [
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "disposition": "recovery_prefer_login",
+      "reason": "use tmail_sub_login"
+    },
+    {
+      "method": "POST",
+      "path": "/api/acc/auth/check-proof",
+      "disposition": "human_only",
+      "reason": "owner JWT lifecycle only"
+    },
+    {
+      "method": "GET",
+      "path": "/api/acc/keys",
+      "disposition": "human_only",
+      "reason": "sub-agent must not manage keys"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/acc/keys/{id}",
+      "disposition": "human_only",
+      "reason": "sub-agent must not manage keys"
+    },
+    {
+      "method": "POST",
+      "path": "/api/acc/keys/owner",
+      "disposition": "owner_only",
+      "reason": "owner key issue"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/acc/keys/owner",
+      "disposition": "owner_only",
+      "reason": "owner key revoke"
+    },
+    {
+      "method": "POST",
+      "path": "/api/acc/keys/owner/rotate",
+      "disposition": "owner_only",
+      "reason": "owner key rotate"
+    },
+    {
+      "method": "POST",
+      "path": "/api/acc/keys/sub",
+      "disposition": "owner_only",
+      "reason": "owner issues sub bind invite"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subaccounts",
+      "disposition": "owner_only",
+      "reason": "subaccounts:manage list"
+    },
+    {
+      "method": "GET",
+      "path": "/api/subaccounts/quota",
+      "disposition": "owner_only",
+      "reason": "subaccounts:manage"
+    },
+    {
+      "method": "GET",
+      "path": "/api/subaccounts/{address}",
+      "disposition": "owner_only",
+      "reason": "subaccounts:manage"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/subaccounts/{address}",
+      "disposition": "owner_only",
+      "reason": "subaccounts:manage revoke"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subaccounts/{address}/purge",
+      "disposition": "owner_only",
+      "reason": "subaccounts:manage purge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/guide/tutorial",
+      "disposition": "resource_only",
+      "reason": "MCP resource tmail://guide/tutorial"
+    },
+    {
+      "method": "GET",
+      "path": "/api/guide/scopes",
+      "disposition": "resource_only",
+      "reason": "MCP resource tmail://guide/scopes"
+    },
+    {
+      "method": "GET",
+      "path": "/api/guide/skills",
+      "disposition": "resource_only",
+      "reason": "MCP resource tmail://guide/skills"
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "disposition": "resource_only",
+      "reason": "health endpoints not for agents"
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/ready",
+      "disposition": "resource_only",
+      "reason": "health endpoints not for agents"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "name": "@tmail/mcp",
+  "version": "1.0.7",
+  "description": "TMail MCP Server — Model Context Protocol server for TMail agent mail API",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "tmail-mcp": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "subagent-coverage.json",
+    "agent-gate.md",
+    "README.md"
+  ],
+  "scripts": {
+    "preinstall": "only-allow npm",
+    "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.check.json && rolldown -c rolldown.config.js",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  },
+  "keywords": [
+    "tmail",
+    "mcp",
+    "mail",
+    "ton",
+    "model-context-protocol",
+    "agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/torganization-ae/tmail-mcp"
+  },
+  "homepage": "https://github.com/torganization-ae/tmail-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/torganization-ae/tmail-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@11.16.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@noble/curves": "^1.9.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "only-allow": "^1.2.2",
+    "rolldown": "^1.0.0-beta.30",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
