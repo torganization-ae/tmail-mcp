@@ -24,7 +24,7 @@ export async function newRuntime(
   authMode: AuthMode,
 ): Promise<Runtime> {
   if (!cfg.apiUrl) {
-    throw new Error('TMAIL_API_URL is not set (mcpServers.tmail.env)');
+    throw new Error('TMAIL_API_URL is not set — add it to mcpServers.tmail.env and reload MCP host');
   }
   const res = await resolveValidated(cfg, sel, policy);
   const rt: Runtime = {

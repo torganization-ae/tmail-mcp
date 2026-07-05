@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Config } from '../src/config/env.js';
-import { checkPaths, checkSelector } from '../src/gate/gate.js';
+import { checkPaths, checkSelector, formatGateActionError } from '../src/gate/gate.js';
 import { pathsForMainDir, pathsForSlug } from '../src/profile/paths.js';
 
 function testGateCfg(dir: string, apiUrl: string, bindInvite: string): Config {
@@ -179,5 +179,16 @@ describe('gate', () => {
     expect(res.status).toBe('SETUP_FINISH');
     expect(res.messages.some((m) => m.includes('Multiple bound wallets'))).toBe(true);
     expect(res.bound_count).toBe(2);
+  });
+
+  it('formatGateActionError returns actionable hints without gate ritual', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tmail-gate-'));
+    const cfg = testGateCfg(dir, '', '');
+    const paths = pathsForMainDir(cfg.projectRoot, path.join(dir, '.tmail'), '');
+    const res = checkPaths(cfg, paths, 0);
+    expect(res.status).toBe('WAIT_ENV_BIND');
+    const err = formatGateActionError(res);
+    expect(err).toContain('TMAIL_API_URL');
+    expect(err).not.toContain('tmail_gate_check');
   });
 });

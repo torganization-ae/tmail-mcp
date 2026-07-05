@@ -20,20 +20,19 @@ const GATE_END = '<!-- tmail-env-gate:end -->';
 
 const ANTI_BYPASS = `## TMail anti-bypass (mandatory)
 
-- Gate: tmail_gate_check (MCP) or \`npx @tmail/mcp gate\` before any mail/auth
-- Multi-wallet: pass wallet_slug (64hex) to gate / tmail_gate_check
+- Call the MCP tool the user needs — tools return actionable errors when env/bind/e2ee/wallet is missing
+- Optional status: tmail_gate_check or \`npx @tmail/mcp gate [wallet_slug]\`
+- Multi-wallet: pass wallet_slug (64hex) when tool error lists multiple wallets
 - Never write \`session.json\` manually; never call tmail-recovery on first setup
-- WAIT_ENV_BIND → user replies "ready" → SETUP_BIND → tmail_generate_payload → @ton/mcp → tmail_sub_bind
-- SETUP_FINISH → tmail_e2ee_generate_local until READY
-- AUTH_NEEDS_LOGIN → do TonProof login (no bind_invite)
+- Missing env → fill mcpServers.tmail.env, reload MCP host, user "ready" → bind flow
+- Incomplete bootstrap → tmail_e2ee_generate_local → tmail_e2ee_register
+- AUTH_NEEDS_LOGIN → tmail_sub_login (no bind_invite)
 - Never use owner api_key (tmail_o_*) in sub-agent env/session
-- Partial profile (session without meta) → SETUP_FINISH with re-bind hint; legacy _pending → warning only
 
 ## TMail MCP-first (mandatory)
 
 - All TMail operations via MCP tools (tmail_*), not raw curl to /api/*
-- Gate: tmail_gate_check before any mail/auth
-- Auth: tmail_generate_payload → @ton/mcp generate_ton_proof (flat) → tmail_sub_bind / tmail_sub_login (ton_proof_json = flat JSON string; never nested REST proof)
+- Auth: tmail_generate_payload → @ton/mcp generate_ton_proof (flat) → tmail_sub_bind / tmail_sub_login
 - Mail: tmail_send_letter, tmail_list_threads, tmail_fetch_thread
 - Skills: install via \`npx skills add github.com/torganization-ae/tmail-mcp\`
 - curl REST = fallback only when MCP server offline
@@ -293,7 +292,7 @@ ${mcpLines}
 
 Next:
   1. Fill TMAIL_BIND_INVITE in tmail env (owner Dashboard → Access)
-  2. Reload MCP host once, then tell your agent: "env is set" → tmail_gate_check → setup flow
+  2. Reload MCP host once, fill TMAIL_BIND_INVITE, then run bind when a tool asks for it
 `);
 }
 

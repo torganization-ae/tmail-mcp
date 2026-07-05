@@ -1,5 +1,6 @@
 import type { GateResult } from '../gate/gate.js';
-import { checkPaths, type GateStatus } from '../gate/gate.js';
+import { checkPaths, formatGateActionError, type GateStatus } from '../gate/gate.js';
+import { countBoundWalletsSync } from '../profile/bound-wallets.js';
 import type { Runtime } from './runtime.js';
 
 export type GateCategory = 'local' | 'setup_auth' | 'mail_ops' | 'human_only';
@@ -18,8 +19,9 @@ function gateAllowsSetupAuth(status: GateStatus): boolean {
   return ['READY', 'WAIT_ENV_BIND', 'AUTH_NEEDS_LOGIN', 'SETUP_BIND', 'SETUP_FINISH'].includes(status);
 }
 
-function gateFirstMessage(res: ReturnType<typeof checkPaths>): string {
-  return res.messages[0] ?? res.status;
+function gateCheckResult(rt: Runtime): GateResult {
+  const boundCount = countBoundWalletsSync(rt.paths.mainDir);
+  return checkPaths(rt.cfg, rt.paths, boundCount);
 }
 
 export function requireHumanOnly(): never {
@@ -31,16 +33,16 @@ export function requireGate(rt: Runtime, cat: GateCategory): void {
     requireHumanOnly();
   }
   if (cat === 'local') return;
-  const res = checkPaths(rt.cfg, rt.paths);
+  const res = gateCheckResult(rt);
   if (cat === 'setup_auth') {
     if (!gateAllowsSetupAuth(res.status)) {
-      throw new Error(`gate ${res.status}: ${gateFirstMessage(res)}`);
+      throw new Error(formatGateActionError(res));
     }
     return;
   }
   if (cat === 'mail_ops') {
     if (res.status !== 'READY') {
-      throw new Error(`gate ${res.status}: mail ops require READY — run tmail_gate_check`);
+      throw new Error(formatGateActionError(res));
     }
   }
 }

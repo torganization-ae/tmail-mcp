@@ -48,7 +48,7 @@ interface ToolSpec {
 const TOOL_SPECS: ToolSpec[] = [
   {
     name: 'tmail_gate_check',
-    description: 'Env Gate check (read-only, no API). Run first before any mail/auth ops.',
+    description: 'Diagnostic setup status (read-only, no API). Tools block with actionable errors when prerequisites are missing.',
     policy: ResolvePolicy.ExplicitIfMulti,
     auth: AuthMode.Optional,
     handler: (rt) => gateCheck(rt),

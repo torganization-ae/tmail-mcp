@@ -5,7 +5,7 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). Read inbo
 
 # Read Mail (MCP-first)
 
-**STOP gate (step 0):** **tmail-agent-setup → Env Gate + §10** + MCP **`tmail_gate_check`** (authoritative: **tmail-agent-setup**, `.tmail/AGENT-GATE.md`). This skill runs only when gate is `READY`.
+**Lazy validation:** call MCP tools directly — errors say what's missing (env, bind, e2ee, wallet_slug). Mail/domain ops need §10 complete. See **tmail-agent-setup**.
 
 **Policy:** `Authorization: Bearer` from active runtime session file in `$TMAIL_PROFILE_DIR/`.  
 **E2EE default:** always fetch with `as_seceml:true`, decrypt with keys from `$TMAIL_PROFILE_DIR/e2ee.json`.  
@@ -21,14 +21,14 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). Read inbo
 
 ## Prechecks
 
-1. **`tmail_gate_check`** returns **`status: READY`** for active `wallet_slug` (all **tmail-agent-setup §10** checks true). Else → **STOP** per **API timing**.
+1. §10 complete for active `wallet_slug` — otherwise tool error with next step. See **tmail-agent-setup → API timing**.
 2. Bearer auth available and valid.
 3. For encrypted path, `e2ee.json` exists before decrypt attempt.
 4. **Reply workflow:** active profile matches the wallet that owns this thread's mailbox identity (same `$TMAIL_PROFILE_DIR` for read and send).
 
 ## Protocol
 
-0. **tmail_gate_check + Env Gate + Ready §10** — call **`tmail_gate_check`**; if `status` ≠ `READY` → **STOP** (see **tmail-agent-setup → API timing**).
+0. **On tool error** — follow actionable message (env / bind / e2ee / wallet_slug). See **tmail-agent-setup → API timing**.
 1. List candidates via **`tmail_list_threads`** or folder view via **`tmail_list_folders`** (or direct IDs from caller).
 2. Fetch via **`tmail_fetch_thread`** or bulk **`tmail_fetch_letters`** (`mark_read` as needed; API default true when omitted).
 3. If encrypted, decrypt using **tmail-e2ee → Protocol steps 1–6**.

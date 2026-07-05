@@ -24,7 +24,7 @@ This playbook does not introduce new env variables.
 
 ## Prechecks
 
-1. Call **`tmail_gate_check`** — if `WAIT_ENV_BIND`, `SETUP_BIND`, `SETUP_FINISH`, `STOP`, or `INVALID_SESSION` → **tmail-agent-setup**, not this skill.
+1. If tool errors indicate first-time setup (`WAIT_ENV_BIND`, `SETUP_BIND`, `SETUP_FINISH`, `INVALID_SESSION`) → **tmail-agent-setup**, not this skill.
 2. Recovery requires prior successful bind evidence: `$TMAIL_PROFILE_DIR/meta.json` with non-empty `sub_address`, OR explicit owner rotate/revoke event documented by user.
 3. Env Gate from **tmail-agent-setup** passed.
 4. Incident type is identified using API response codes and local file state.
@@ -44,12 +44,12 @@ This playbook does not introduce new env variables.
 
 ## Recovery steps (ordered)
 
-1. **`tmail_gate_check`** — confirm not in setup-only state.
+1. Confirm not in first-time setup (no setup-only tool errors).
 2. Identify wallet: **`tmail_list_wallets`** or user-provided `wallet_slug`.
 3. **Login path (preferred):** `tmail_generate_payload` → `@ton/mcp` → **`tmail_sub_login`** → persist `api_key` to `${TMAIL_MAIN_DIR}/<wallet_slug>/profile/session.json`.
 4. **Re-bind path:** when sub revoked or invite rotated → **`tmail_sub_bind`** with fresh `TMAIL_BIND_INVITE`.
 5. Re-run **`tmail_e2ee_generate_local`** if `e2ee.json` missing or `registered=false`.
-6. **`tmail_gate_check(wallet_slug=...)`** → must reach **`READY`**.
+6. Target wallet must satisfy §10 before mail ops resume.
 
 ## Failure handling
 
@@ -61,6 +61,6 @@ This playbook does not introduce new env variables.
 
 ## Definition of done
 
-1. **`tmail_gate_check` → `READY`** for target wallet.
+1. §10 complete for target wallet before recovery mail ops.
 2. Path state is canonical (`.tmail/<wallet_slug>/profile/...`).
 3. No obsolete `.tmail/_pending/` folder (delete if empty after legacy migration).

@@ -5,7 +5,7 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). Register 
 
 # TMail Webhooks (REST)
 
-**STOP gate (step 0):** **tmail-agent-setup → Env Gate + §10** + MCP **`tmail_gate_check`** (authoritative: **tmail-agent-setup**, `.tmail/AGENT-GATE.md`). This skill runs only when gate is `READY`.
+**Lazy validation:** call MCP tools directly — errors say what's missing (env, bind, e2ee, wallet_slug). Mail/domain ops need §10 complete. See **tmail-agent-setup**.
 
 Scope: **`webhook:manage`**. Secret persisted in **`$TMAIL_PROFILE_DIR/webhook.json`** (under `.tmail/<wallet_slug>/`; **tmail-agent-setup**).
 
@@ -19,14 +19,14 @@ Scope: **`webhook:manage`**. Secret persisted in **`$TMAIL_PROFILE_DIR/webhook.j
 
 ## Prechecks
 
-1. **`tmail_gate_check`** returns **`status: READY`** for active `wallet_slug` (all **tmail-agent-setup §10** checks true). Else → **STOP** per **API timing**.
+1. §10 complete for active `wallet_slug` — otherwise tool error with next step. See **tmail-agent-setup → API timing**.
 2. Registration URL is HTTPS in production.
 3. Secret exists in `$TMAIL_PROFILE_DIR/webhook.json`.
 4. Incoming handler reads raw bytes before JSON parsing.
 
 ## Protocol
 
-0. **tmail_gate_check + Env Gate + Ready §10** — call **`tmail_gate_check`**; if `status` ≠ `READY` → **STOP** (see **tmail-agent-setup → API timing**).
+0. **On tool error** — follow actionable message (env / bind / e2ee / wallet_slug). See **tmail-agent-setup → API timing**.
 1. Register/update via **`tmail_webhook_set`**; read **`tmail_webhook_get`**; delete **`tmail_webhook_delete`**; rotate **`tmail_webhook_rotate_secret`** (see **Webhook lifecycle**).
 2. On incoming event, verify signature first (**§3**).
 3. Parse event payload only after signature success.

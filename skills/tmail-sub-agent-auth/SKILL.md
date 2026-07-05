@@ -7,7 +7,7 @@ description: Sub-agent REST auth — TonProof via @ton/mcp, permanent API key, s
 
 **Policy:** HTTP API only. Bind/login return a **permanent signed API key** inline. Use `Authorization: Bearer <api_key>` for ALL daily requests. No JWT refresh cycles on happy path.
 
-**Env gate:** call **`tmail_gate_check`** then **tmail-agent-setup → Env Gate** first. If `WAIT_ENV_BIND` — fill bind_invite and wait "ready". If `SETUP_BIND` — MCP bind flow. If `SETUP_FINISH` — MCP e2ee. If `AUTH_NEEDS_LOGIN` — `tmail_sub_login` (no bind_invite). If `STOP` (hard error) or `INVALID_SESSION` — follow instructions and stop.
+**Lazy validation:** call MCP tools directly — tool errors guide env/bind/e2ee/login steps. See **tmail-agent-setup**.
 **Auth rule:** sub-agent can use its own TonProof with `bind_invite` on `/api/subacc/auth/bind` (first bind). Sub-agent can use its own TonProof without invite on `/api/subacc/auth/login` (already bound). Owner wallet proof is forbidden.
 
 **Credentials:**
@@ -84,7 +84,7 @@ After bind/login: MCP creates `${TMAIL_MAIN_DIR}/<wallet_slug>/profile` — do *
 
 `TMAIL_API_KEY` lives in `$TMAIL_PROFILE_DIR/session.json` after bind/login — not in MCP env.
 
-**Domain/mail ops** (send, read, webhook, NFT): only when **`tmail_gate_check` → `status: READY`** for active wallet.
+**Domain/mail ops** (send, read, webhook, NFT): only when §10 complete for active wallet (tool succeeds).
 
 Never hardcode profile paths. Resolve auth state via `$TMAIL_PROFILE_DIR/session.json`.
 
@@ -258,7 +258,7 @@ POST /api/tbox/letters
 
 ## Refresh shortcut (optional)
 
-**Blocked when:** Env Gate was open in this session; `meta.json` does not exist (no prior successful bind); **`tmail_gate_check`** returns `WAIT_ENV_BIND` or `INVALID_SESSION`.
+**Blocked when:** env missing; `meta.json` does not exist (no prior successful bind); corrupt session artifact.
 
 Refresh/login only when `$TMAIL_PROFILE_DIR/meta.json` already existed with `sub_address` from a prior bind, or explicit recovery branch in **tmail-recovery**.
 

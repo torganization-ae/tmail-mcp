@@ -140,7 +140,7 @@ function setupFinishHints(p: ProfilePaths, cfg: Config): string[] {
   const gi = gitignoreWarningIfNeeded(cfg, p);
   if (gi) hints.push(gi);
   if (hints.length === 0) {
-    hints.push('Run tmail_gate_check — if still SETUP_FINISH, see tmail-agent-setup §10');
+    hints.push('See tmail-agent-setup for bootstrap steps');
   }
   return hints;
 }
@@ -218,7 +218,7 @@ function resolveErrorResult(cfg: Config, re: ResolveError, boundCount: number): 
 
   if (re.code === ERR_MULTI_WALLET_AMBIGUOUS) {
     const msgs = [
-      'Multiple bound wallets — pass wallet_slug to tmail_gate_check',
+      'Multiple bound wallets — pass wallet_slug (or sub_address) to this tool',
       re.action,
     ];
     for (const w of re.availableWallets) {
@@ -366,6 +366,32 @@ export function checkPaths(cfg: Config, paths: ProfilePaths, boundCount = 0): Ga
     paths,
     bound_count: boundCount,
   };
+}
+
+/** Actionable text for tool errors — skips bare status labels. */
+export function formatGateActionError(res: GateResult): string {
+  const skip = new Set<string>([
+    res.status,
+    'READY',
+    'WAIT_ENV_BIND',
+    'SETUP_BIND',
+    'SETUP_FINISH',
+    'AUTH_NEEDS_LOGIN',
+  ]);
+  const actionable = res.messages.filter((m) => !skip.has(m));
+  if (actionable.length) return actionable.join('\n');
+  switch (res.status) {
+    case 'WAIT_ENV_BIND':
+      return 'Set TMAIL_API_URL and TMAIL_BIND_INVITE in mcpServers.tmail.env, reload MCP host';
+    case 'SETUP_BIND':
+      return 'Bind wallet: tmail_generate_payload → @ton/mcp → tmail_sub_bind';
+    case 'SETUP_FINISH':
+      return 'Complete bootstrap: tmail_e2ee_generate_local → tmail_e2ee_register';
+    case 'AUTH_NEEDS_LOGIN':
+      return 'Login: tmail_generate_payload → @ton/mcp → tmail_sub_login';
+    default:
+      return res.status;
+  }
 }
 
 export function exitCodeForStatus(status: GateStatus): number {

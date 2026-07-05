@@ -14,7 +14,7 @@ npx skills add github.com/torganization-ae/tmail-mcp
 
 1. Set `TMAIL_BIND_INVITE` in `mcpServers.tmail.env`
 2. Reload your MCP host
-3. Run bind flow via `@ton/mcp` and `tmail_gate_check`
+3. Run bind flow via `@ton/mcp` when a tool reports missing wallet/session
 4. Use `tmail_*` MCP tools
 
 **Manual MCP block** (if auto-detect skipped):

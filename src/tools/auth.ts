@@ -39,7 +39,7 @@ export async function authStatus(rt: Runtime): Promise<ReturnType<typeof textRes
     return textResult({
       authenticated: false,
       error: 'no bound wallet profile on disk',
-      action: 'Run tmail_gate_check then tmail_sub_bind or tmail_sub_login',
+      action: 'Run tmail_sub_bind or tmail_sub_login for this wallet',
     });
   }
   const { session, error } = loadSessionData(rt.paths.dir);
@@ -47,7 +47,7 @@ export async function authStatus(rt: Runtime): Promise<ReturnType<typeof textRes
     return textResult({
       authenticated: false,
       error: error ?? 'no session',
-      action: 'Run tmail_gate_check then tmail_sub_bind or tmail_sub_login',
+      action: 'Run tmail_sub_bind or tmail_sub_login for this wallet',
     });
   }
   try {

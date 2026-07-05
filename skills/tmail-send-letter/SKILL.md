@@ -5,7 +5,7 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). Send mail
 
 # Send Letter (MCP-first)
 
-**STOP gate (step 0):** **tmail-agent-setup → Env Gate + §10** + MCP **`tmail_gate_check`** (authoritative: **tmail-agent-setup**, `.tmail/AGENT-GATE.md`). This skill runs only when gate is `READY`.
+**Lazy validation:** call MCP tools directly — errors say what's missing (env, bind, e2ee, wallet_slug). Mail/domain ops need §10 complete. See **tmail-agent-setup**.
 
 **Policy:** Bearer API key from active runtime session file in `$TMAIL_PROFILE_DIR/`. Load `e2ee.json` from `$TMAIL_PROFILE_DIR/` before every send (E2EE default).  
 **After send:** return API response to caller; **no** local sent-mail files on disk.
@@ -32,7 +32,7 @@ Paths: **tmail-agent-setup → Path layout**.
 
 ## Prechecks
 
-1. **`tmail_gate_check`** returns **`status: READY`** for active `wallet_slug` (all **tmail-agent-setup §10** checks true). Else → **STOP** per **API timing**.
+1. §10 complete for active `wallet_slug` — otherwise tool error with next step. See **tmail-agent-setup → API timing**.
 2. **`tmail_get_limits`** when sending batch or large payloads.
 3. Validate recipients count (`<=10`) and attachments count (`<=10`).
 4. Validate total letter bytes (`<=25MB`).
@@ -42,7 +42,7 @@ Paths: **tmail-agent-setup → Path layout**.
 
 ## Protocol
 
-0. **tmail_gate_check + Env Gate + Ready §10** — call **`tmail_gate_check`**; if `status` ≠ `READY` → **STOP** (see **tmail-agent-setup → API timing**).
+0. **On tool error** — follow actionable message (env / bind / e2ee / wallet_slug). See **tmail-agent-setup → API timing**.
 1. **`tmail_list_mailboxes`** — list mailboxes for **current** Bearer wallet; copy `web3_address` exactly.
 2. Resolve `from_address`:
    - **Reply** (`thread_id` set) → **Reply in thread** algorithm (`reply_from_address`); **never** `meta.default_mailbox`;
@@ -254,7 +254,7 @@ Delivery is **async** — use webhooks for incoming replies.
 
 **API fact:** `POST /api/tbox/letters` does **not** restore `From` from `thread_id`. If `from_address` is omitted, server uses the wallet **free** mailbox — not the thread's prior sender. Agent must set `from_address` explicitly on every reply.
 
-**One thread = one sub-account:** read and reply through the **same** `$TMAIL_PROFILE_DIR` / API key (`tmail_gate_check(wallet_slug)` when multi-wallet).
+**One thread = one sub-account:** read and reply through the **same** `$TMAIL_PROFILE_DIR` / API key (pass `wallet_slug` when multi-wallet).
 
 ### Reply metadata (mandatory when `thread_id` set)
 

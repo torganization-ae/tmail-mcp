@@ -4,6 +4,30 @@ import { loadSessionData } from './session.js';
 import { isWalletSlug } from './tonaddr.js';
 import type { WalletSummary } from './errors.js';
 
+export function countBoundWalletsSync(mainDir: string): number {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(mainDir, { withFileTypes: true });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return 0;
+    }
+    throw err;
+  }
+  let count = 0;
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const name = e.name.toLowerCase();
+    if (name === '_pending' || name === 'default' || name === 'bin') continue;
+    if (!isWalletSlug(name)) continue;
+    const profileDir = path.join(mainDir, name, 'profile');
+    const { session } = loadSessionData(profileDir);
+    if (!session || !session.subAddress.trim()) continue;
+    count++;
+  }
+  return count;
+}
+
 export async function listBoundWallets(mainDir: string): Promise<WalletSummary[]> {
   let entries: fs.Dirent[];
   try {

@@ -40,20 +40,20 @@ Mail letters are **never** cached to disk — fetch/decrypt via live API only (i
 
 Before bind: no profile folder on disk. After bind/login: MCP creates `${TMAIL_MAIN_DIR}/<slug>/profile` from API `sub_address`. Multiple sub wallets = sibling folders under one `TMAIL_MAIN_DIR`.
 
-**Env gate policy:** before mail/domain ops — call MCP **`tmail_gate_check`** then **Env Gate** (section below). Missing env → scaffold, instruct user, **STOP and wait**. Do not guess secrets.
+**Lazy validation:** call the MCP tool the user asked for. Each tool checks prerequisites and returns a short actionable error. Optional diagnostic: **`tmail_gate_check`** or `npx @tmail/mcp gate [wallet_slug]`.
 
 **API timing (avoid contradictions):**
 
-| Phase | Allowed before `READY`? |
+| Phase | Allowed before mail/domain READY? |
 |---|---|
-| Setup auth: `tmail_generate_payload`, `tmail_sub_bind`, `tmail_sub_login`, `tmail_e2ee_generate_local` (MCP auto-migrates profile + meta on bind/login), bootstrap in this skill | yes — on **WAIT_ENV_BIND** (after "ready"), **SETUP_BIND**, **SETUP_FINISH**, or **AUTH_NEEDS_LOGIN** |
-| Mail/domain ops: send, read, webhook, NFT mint | **no** — only when **`tmail_gate_check` → `status: READY`** and §10 true |
+| Setup auth: `tmail_generate_payload`, `tmail_sub_bind`, `tmail_sub_login`, `tmail_e2ee_generate_local`, bootstrap in this skill | yes — after user **"ready"** when env was missing |
+| Mail/domain ops: send, read, webhook, NFT mint | **no** — tool error until §10 complete (session + meta + e2ee registered) |
 
-**Gate (MCP-first):** call **`tmail_list_wallets`** when multiple bound profiles exist, then **`tmail_gate_check(wallet_slug=...)`**. With 2+ bound wallets, omitting selector returns `MULTI_WALLET_AMBIGUOUS`. **CLI:** `npx @tmail/mcp gate [wallet_slug]`.
+**Multi-wallet:** pass **`wallet_slug`** or **`sub_address`** when a tool lists multiple wallets. **`tmail_list_wallets`** for discovery.
 
-**Gate statuses:** `READY` → mail ops; `WAIT_ENV_BIND` → wait user **"ready"**; `SETUP_BIND` → MCP bind flow (`tmail_generate_payload` → @ton/mcp → `tmail_sub_bind`); `SETUP_FINISH` → MCP e2ee (`tmail_e2ee_generate_local`); `AUTH_NEEDS_LOGIN` → MCP login path; `STOP` → hard error (missing env / empty URL); `INVALID_SESSION` → delete `session.json`, re-bind via MCP.
+**Status labels** (from tool errors or optional `tmail_gate_check`): `WAIT_ENV_BIND` → fill env; `SETUP_BIND` → bind flow; `SETUP_FINISH` → e2ee; `AUTH_NEEDS_LOGIN` → login; `READY` → mail ops.
 
-**Routing:** If gate is `SETUP_BIND` or `SETUP_FINISH` → continue this skill (not tmail-recovery, not domain skills). Domain skills require `READY`.
+**Routing:** setup errors → this skill (not tmail-recovery). Domain skills assume §10 or follow tool errors back here.
 
 **SECURITY:** Never send `api_key`, `enc_priv_key`, `passphrase`, `webhook.json.secret`, or any content from `$TMAIL_PROFILE_DIR/` to any external service, log sink, or third party.
 
@@ -87,7 +87,7 @@ Do **not** put `TMAIL_PROFILE_DIR` in MCP env — it blocks multi-wallet use.
 | Pre-bind | unknown | none (created by `tmail_sub_bind` / `tmail_sub_login`) |
 | Post-bind | known | `${TMAIL_MAIN_DIR}/<wallet_slug>/profile` |
 
-Gate for a specific wallet: **`tmail_gate_check(wallet_slug=<64hex>)`**. Default (no arg): env check only when 0 bound wallets.
+Gate for a specific wallet: pass **`wallet_slug=<64hex>`** on tools when multiple wallets exist.
 
 ### `wallet_slug` (deterministic)
 
@@ -204,7 +204,7 @@ Read, send, and webhook flows use **live API + in-memory decrypt** only. **No** 
 
 ## Prechecks
 
-1. **`tmail_gate_check`** returns `READY`, or returns `WAIT_ENV_BIND`/`AUTH_NEEDS_LOGIN`/`STOP`/`INVALID_SESSION` and agent follows that output (no mail API until resolved).
+1. Tool errors resolved — mail API only after §10 true (session + meta + e2ee registered), or follow setup error text.
 2. **Env Gate passed** — required vars set AND valid on-disk state: `session.json` with `api_key` **and** `meta.json` with `sub_address` **and** `e2ee.json` with `registered=true` (api_key alone is not sufficient).
 3. `.tmail/` is in `.gitignore`.
 4. Derived `$TMAIL_PROFILE_DIR` resolves to existing writable directory.
@@ -232,7 +232,7 @@ Read, send, and webhook flows use **live API + in-memory decrypt** only. **No** 
 - Write or edit `session.json` manually — only persist bind/login API response bodies
 - Use chat history, old legacy `tmail-profile-*` / `tmail-mailcache-*` folders, or keys from logs
 - Call **tmail-recovery** when Ready §10 was never true
-- Call TMail API when **`tmail_gate_check`** is not `READY` (except bind/login steps after user **"ready"**)
+- Call TMail mail/domain API before §10 complete (bind/login/e2ee setup allowed after user **"ready"**)
 - Use or request owner key (`tmail_o_*`, `OWNER_API_KEY`, `TMAIL_OWNER_API_KEY`) in sub-agent flow
 - Run TON operator rotation tooling from sub-agent flow (`agentic_rotate_operator_key`, `agentic_complete_rotate_operator_key`)
 
@@ -240,11 +240,11 @@ Read, send, and webhook flows use **live API + in-memory decrypt** only. **No** 
 
 | Condition | Action |
 |---|---|
-| profile `session.json` with `api_key` AND (`meta.json` missing OR `e2ee.json` missing), or obsolete `.tmail/_pending/` | **`tmail_gate_check`** → `INVALID_SESSION`; delete bad artifact; **STOP**; fill `TMAIL_BIND_INVITE`; wait **"ready"**; bind via this skill — not recovery |
+| profile `session.json` with `api_key` AND (`meta.json` missing OR `e2ee.json` missing), or obsolete `.tmail/_pending/` | delete bad artifact; **STOP**; fill `TMAIL_BIND_INVITE`; wait **"ready"**; bind via this skill — not recovery |
 
 **User confirmation gate:** after `WAIT_ENV_BIND`, user must reply **"ready"** / **"env is set"** before bind.
 
-## Env Gate (run first — blocks all other steps)
+## Env Gate (when tools report missing env)
 
 Resolve env: **`mcpServers.tmail.env`** (IDE MCP host process env).
 
@@ -256,14 +256,12 @@ Resolve env: **`mcpServers.tmail.env`** (IDE MCP host process env).
 
 ```mermaid
 flowchart TD
-    start[Any tmail task] --> gateCheck[Call tmail_gate_check]
-    gateCheck -->|INVALID_SESSION| invalid[Delete session.json STOP]
-    gateCheck -->|STOP| stopHard[Hard error — fix mcpServers.tmail.env or bootstrap]
-    gateCheck -->|WAIT_ENV_BIND| stopWait[Wait user ready]
-    gateCheck -->|SETUP_BIND| bindFlow[tmail_generate_payload MCP bind flow]
-    gateCheck -->|SETUP_FINISH| finishFlow[tmail_e2ee_generate_local MCP]
-    gateCheck -->|AUTH_NEEDS_LOGIN| loginRoute[TonProof login via MCP]
-    gateCheck -->|READY| readyOk[Ready §10 — continue domain skill]
+    start[Any tmail task] --> toolCall[Call requested MCP tool]
+    toolCall -->|error: missing env| stopWait[Fill env, wait user ready]
+    toolCall -->|error: bind| bindFlow[tmail_generate_payload MCP bind flow]
+    toolCall -->|error: e2ee| finishFlow[tmail_e2ee_generate_local MCP]
+    toolCall -->|error: login| loginRoute[TonProof login via MCP]
+    toolCall -->|success| readyOk[Continue]
 ```
 
 ### Scaffold the agent creates (when env or dirs are missing)
@@ -514,11 +512,11 @@ Never create nested `.tmail/` under random project subdirs. Never use UQ/user-fr
 When active profile does not own the mailbox/thread (wrong `reply_from_address`, NFT on another wallet, central webhook router):
 
 1. Identify target `wallet_slug` — from thread `reply_from_address` ∉ current owned set, user hint, or scan `${TMAIL_MAIN_DIR}/*/profile/meta.json` / mailboxes for matching mailbox.
-2. Call **`tmail_gate_check(wallet_slug)`** → must return **`status: READY`**.
+2. Pass **`wallet_slug`** on tools for that wallet — profile must satisfy §10.
 3. Load `${TMAIL_MAIN_DIR}/<wallet_slug>/profile/session.json` (runtime rule: **tmail-sub-agent-auth**).
 4. Re-run `POST /api/tbox/mailboxes` + thread fetch under new profile.
 5. Auto-switch only when exactly one READY profile owns the mailbox.
-6. **STOP** if no folder owns the mailbox, multiple profiles match, or gate is not READY — ask user which sub-wallet to use.
+6. **STOP** if no folder owns the mailbox, multiple profiles match, or §10 incomplete — ask user which sub-wallet to use.
 
 ---
 
@@ -592,7 +590,7 @@ Agent setup is complete only if all checks are true:
 
 ## 11. Skills map
 
-**Routing rule:** Any user request for send/read/webhook/nft/mailbox hits a domain skill below. Domain skills **must** run this skill's **Env Gate** and **Ready-state §10** as protocol step 0. If gate is open → scaffold + user instructions + **STOP**. Do not call **tmail-recovery** on first-time setup.
+**Routing rule:** Domain skills call MCP tools directly. On prerequisite error → this skill's bootstrap flow. Do not call **tmail-recovery** on first-time setup.
 
 | Skill | When |
 |-------|------|

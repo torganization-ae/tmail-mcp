@@ -5,7 +5,7 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). E2EE wire
 
 # TMail E2EE (REST, protocol-level)
 
-**STOP gate (step 0):** **tmail-agent-setup → Env Gate + §10** + MCP **`tmail_gate_check`** (authoritative: **tmail-agent-setup**, `.tmail/AGENT-GATE.md`). Decrypt/read flows run only when gate is `READY`; key register during bootstrap follows **tmail-agent-setup → API timing**.
+**Lazy validation:** call MCP tools directly — errors say what's missing (env, bind, e2ee, wallet_slug). Decrypt/read flows need §10 complete. See **tmail-agent-setup**.
 
 This skill is the exact protocol guide for E2EE in TMail (no abstract wording).
 
@@ -23,16 +23,16 @@ This skill is the exact protocol guide for E2EE in TMail (no abstract wording).
 
 ## Prechecks
 
-1. **`tmail_gate_check`** returns **`status: READY`** for active `wallet_slug` (all **tmail-agent-setup §10** checks true). Else → **STOP** per **API timing** (key register during bootstrap follows **API timing**).
+1. §10 complete for active `wallet_slug` — otherwise tool error with next step. See **tmail-agent-setup → API timing**.
 2. Setup bootstrap step for E2EE: **`tmail_e2ee_generate_local(wallet_slug=..., register=true)`** — no passphrase arg (auto-generate → `e2ee.passphrase`); writes `e2ee.json` locally **before** PUT `/api/tbox/keys`. Human reveal: `npx @tmail/mcp e2ee-passphrase reveal <slug>`.
 3. `GET /api/tbox/keys` returns non-empty `pub_key_e2e`.
 4. Local unlocked private key matches local public key.
 5. For encrypted letter, `toList[my_pub_key_base64]` exists.
-6. Mail/domain decrypt flows only when **`tmail_gate_check` → READY**; bind/login/e2ee-register may run before READY only per **tmail-agent-setup → API timing**.
+6. Mail/domain decrypt flows only when §10 complete; bind/login/e2ee-register may run earlier per **tmail-agent-setup → API timing**.
 
 ## Protocol
 
-0. **tmail_gate_check + Env Gate + Ready §10** — call **`tmail_gate_check`**; if `status` ≠ `READY` → **STOP** (see **tmail-agent-setup → API timing**).
+0. **On tool error** — follow actionable message (env / bind / e2ee / wallet_slug). See **tmail-agent-setup → API timing**.
 1. Parse read payload (`as_seceml:true` -> decode SecEML, else use `encrypted_data`).
 2. Unlock private key from `e2ee.json` (PBKDF2 using `pbkdf2_iterations` from file — currently **600000** — + AES-GCM).
 3. Unwrap letter AES key from `toList` (NaCl + PBKDF2 10000).

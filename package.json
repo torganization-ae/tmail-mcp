@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "tmail-mcp": "./dist/cli.js"
+    "tmail-mcp": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -33,7 +33,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/torganization-ae/tmail-mcp"
+    "url": "git+https://github.com/torganization-ae/tmail-mcp.git"
   },
   "homepage": "https://github.com/torganization-ae/tmail-mcp#readme",
   "bugs": {

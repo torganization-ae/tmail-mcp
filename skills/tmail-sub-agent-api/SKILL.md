@@ -5,13 +5,13 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). MCP tool 
 
 # TMail Sub-Agent — MCP tools + REST fallback
 
-**STOP gate (step 0):** **tmail-agent-setup → Env Gate + §10** + MCP **`tmail_gate_check`**. Catalog MCP tools run only when gate is `READY`; auth lifecycle follows **tmail-agent-setup → API timing**.
+**Lazy validation:** call MCP tools directly — errors say what's missing. Catalog tools need §10 for mail/domain ops. Auth lifecycle: **tmail-agent-setup → API timing**.
 
 **MCP-first:** agents call **`tmail_*` tools** via `npx @tmail/mcp`. This skill maps tools to REST endpoints for **fallback only** when MCP server is offline.
 
 | MCP tool | REST fallback (offline only) |
 |----------|------------------------------|
-| `tmail_gate_check` | `npx @tmail/mcp gate` (CLI fallback) |
+| `tmail_gate_check` | optional status / `npx @tmail/mcp gate` |
 | `tmail_auth_status` | `GET /api/tbox/limits` |
 | `tmail_list_mailboxes` | `POST /api/tbox/mailboxes` |
 | `tmail_get_limits` | `GET /api/tbox/limits` |
@@ -57,14 +57,14 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). MCP tool 
 ## Prechecks
 
 1. **Auth lifecycle endpoints** (`/api/auth/*`, `/api/subacc/auth/*`, `/api/tbox/keys/*` during bootstrap): use **MCP tools** on **WAIT_ENV_BIND**, **SETUP_BIND**, **SETUP_FINISH**, **AUTH_NEEDS_LOGIN** per **tmail-agent-setup → API timing** (REST fallback only when MCP offline).
-2. **Catalog/domain ops** (mailboxes, letters, threads, webhook): **`tmail_gate_check` → READY** for active `wallet_slug`. Else → **STOP** per **API timing**.
+2. **Catalog/domain ops** (mailboxes, letters, threads, webhook): §10 complete for active `wallet_slug` — else tool error. See **API timing**.
 3. Correct scope for target endpoint.
 4. Payload limits respected (`<=10` recipients, `<=10` attachments, `<=25MB` total letter size).
 5. Required local files loaded (`session.json`; `e2ee.json` for encrypted read/send flows).
 
 ## Protocol
 
-0. **tmail_gate_check + Env Gate + Ready §10** — call **`tmail_gate_check`**; if `status` ≠ `READY` → **STOP** (see **tmail-agent-setup → API timing**).
+0. **On tool error** — follow actionable message. See **tmail-agent-setup → API timing**.
 1. Select **MCP tool** from table above by task type (auth/send/read/webhook).
 2. Execute tool with strict parameters (MCP enforces API schemas).
 3. Persist profile side effects per owning skill (session, meta, e2ee, webhook — never mail bodies).

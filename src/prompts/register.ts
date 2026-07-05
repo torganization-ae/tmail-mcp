@@ -4,7 +4,7 @@ export function registerPrompts(server: McpServer): void {
   server.registerPrompt(
     'tmail-onboarding',
     {
-      description: 'Owner/sub-agent onboarding: Env Gate → bind → Ready §10',
+      description: 'Owner/sub-agent onboarding: bind → e2ee → mail ops',
     },
     async () => ({
       messages: [
@@ -12,13 +12,13 @@ export function registerPrompts(server: McpServer): void {
           role: 'user',
           content: {
             type: 'text',
-            text: `1. Run tmail_gate_check — mail ops only when READY. Use tmail_list_wallets when multiple profiles exist.
-2. If WAIT_ENV_BIND: fill TMAIL_BIND_INVITE in mcpServers.tmail.env, Reload MCP host, user confirms "ready".
-3. If SETUP_BIND: tmail_generate_payload → @ton/mcp → tmail_sub_bind (MCP only, not curl; no Authorization header).
-4. If SETUP_FINISH: tmail_e2ee_generate_local(wallet_slug=..., register=true).
-5. If AUTH_NEEDS_LOGIN: tmail_generate_payload → @ton/mcp → tmail_sub_login (no invite; no Authorization header).
-6. Daily ops: pass wallet_slug on strict mutators; tmail_send_letter, tmail_list_threads — never raw curl to /api/*.
-7. Never use owner api_key (tmail_o_*) in sub-agent context.`,
+            text: `Call the MCP tool the user needs — errors tell you what to fix next.
+1. Missing env: fill TMAIL_BIND_INVITE in mcpServers.tmail.env, reload MCP host, user confirms "ready".
+2. Bind: tmail_generate_payload → @ton/mcp → tmail_sub_bind (MCP only; no Authorization header).
+3. E2EE: tmail_e2ee_generate_local(wallet_slug=..., register=true).
+4. Re-login: tmail_generate_payload → @ton/mcp → tmail_sub_login (no invite).
+5. Multi-wallet: tmail_list_wallets; pass wallet_slug on strict mutators.
+6. Never use owner api_key (tmail_o_*) in sub-agent context.`,
           },
         },
       ],
@@ -36,15 +36,14 @@ export function registerPrompts(server: McpServer): void {
           role: 'user',
           content: {
             type: 'text',
-            text: `Gate: tmail_gate_check (pass wallet_slug when 2+ bound wallets)
-Wallets: tmail_list_wallets
-- WAIT_ENV_BIND → fill TMAIL_BIND_INVITE in mcpServers.tmail.env, Reload MCP host, user "ready"
-- SETUP_BIND → tmail_generate_payload → @ton/mcp → tmail_sub_bind (MCP only; AuthModeNone — no Bearer)
-- SETUP_FINISH → tmail_e2ee_generate_local(wallet_slug=..., register=true)
-- AUTH_NEEDS_LOGIN → tmail_generate_payload → @ton/mcp → tmail_sub_login (no invite; AuthModeNone)
-- READY → use tmail_* mail tools with permanent api_key from session.json
-- INVALID_SESSION → delete session.json, refill invite, bind again via MCP
-- STOP → hard error (empty TMAIL_API_URL in mcpServers.tmail.env) — fix env, Reload MCP host, bootstrap`,
+            text: `Tools block with actionable errors — no separate gate step.
+Wallets: tmail_list_wallets (pass wallet_slug when 2+ bound)
+- Missing env → fill TMAIL_BIND_INVITE, reload MCP host, user "ready"
+- Bind → tmail_generate_payload → @ton/mcp → tmail_sub_bind
+- E2EE → tmail_e2ee_generate_local(register=true)
+- Re-login → tmail_sub_login (no invite)
+- Corrupt session → delete session.json, bind again
+- Hard STOP → fix TMAIL_API_URL in mcpServers.tmail.env, reload MCP host`,
           },
         },
       ],

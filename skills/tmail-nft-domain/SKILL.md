@@ -5,7 +5,7 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). Mint @nam
 
 # NFT Domain Mint (MCP-first)
 
-**STOP gate (step 0):** **tmail-agent-setup → Env Gate + §10** + MCP **`tmail_gate_check`** (authoritative: **tmail-agent-setup**, `.tmail/AGENT-GATE.md`). This skill runs only when gate is `READY`.
+**Lazy validation:** call MCP tools directly — errors say what's missing (env, bind, e2ee, wallet_slug). Mail/domain ops need §10 complete. See **tmail-agent-setup**.
 
 Scope: **`mailbox:read`**. Payer = authenticated wallet (from Bearer token).
 
@@ -21,14 +21,14 @@ Scope: **`mailbox:read`**. Payer = authenticated wallet (from Bearer token).
 
 ## Prechecks
 
-1. **`tmail_gate_check`** returns **`status: READY`** for active `wallet_slug` (all **tmail-agent-setup §10** checks true). Else → **STOP** per **API timing**.
+1. §10 complete for active `wallet_slug` — otherwise tool error with next step. See **tmail-agent-setup → API timing**.
 2. Name passes local regex: lowercase latin, digits, middle hyphen only.
 3. Wallet has enough TON for `total_nano`.
 4. Caller is ready to submit every tx from `transactions[]`.
 
 ## Protocol
 
-0. **tmail_gate_check + Env Gate + Ready §10** — call **`tmail_gate_check`**; if `status` ≠ `READY` → **STOP** (see **tmail-agent-setup → API timing**).
+0. **On tool error** — follow actionable message (env / bind / e2ee / wallet_slug). See **tmail-agent-setup → API timing**.
 1. **`tmail_nft_quote_mint`** with `{name, ref_addrs?}` — returns price breakdown **without** `transactions`. If `taken:true` → stop and pick another name.
 2. Show **`total_nano`** to user; **STOP** until user replies **"confirm mint"** or sends `{confirm_mint:true}`.
 3. **`tmail_nft_prepare_mint`** with `user_confirmed:true` and `expected_total_nano` copied from quote. MCP re-checks `taken` and price **after API** — mismatch → re-quote.
