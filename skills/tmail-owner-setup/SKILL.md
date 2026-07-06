@@ -75,7 +75,7 @@ Content-Type: application/json
   "address": "0:<owner_wallet_hex>",
   "proof": {
     "timestamp": 1719054000,
-    "domain": { "value": "your-api.example.com", "lengthBytes": 20 },
+    "domain": { "value": "<API_URL_TMAIL hostname>", "lengthBytes": 20 },
     "payload": "<hex_from_generate_payload>",
     "signature": "<base64>",
     "state_init": "<base64>"

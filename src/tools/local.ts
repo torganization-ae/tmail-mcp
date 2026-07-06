@@ -1,12 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isInteractiveTTY, promptSelectMcpHosts } from '../config/host-prompt.js';
 import { packageRoot, ENV_FILE_NAME, ENV_PROFILE_DIR, ENV_PROJECT_ROOT, loadConfig, resolveStorageLayout } from '../config/env.js';
+import { isManualMcpHostId, MCP_MANUAL_SETUP_HINT } from '../config/mcp-by-agent.js';
 import {
+  detectInstalledMcpHosts,
   formatMcpHostHints,
+  parseHostIds,
+  readHostLock,
   resolveMcpInitTargets,
-  type McpHostTarget,
+  writeHostLock,
+  type McpHost,
 } from '../config/hosts.js';
+import { mergeTmailMcpConfig } from '../config/mcp-merge.js';
 import { listBoundWallets } from '../profile/bound-wallets.js';
 import { checkSelector, exitCodeForStatus } from '../gate/gate.js';
 import { hasLegacyPassphraseInJson, passphraseStatus } from '../profile/passphrase.js';
@@ -24,7 +31,7 @@ const ANTI_BYPASS = `## TMail anti-bypass (mandatory)
 - Optional status: tmail_gate_check or \`npx @tmail/mcp gate [wallet_slug]\`
 - Multi-wallet: pass wallet_slug (64hex) when tool error lists multiple wallets
 - Never write \`session.json\` manually; never call tmail-recovery on first setup
-- Missing env → fill mcpServers.tmail.env, reload MCP host, user "ready" → bind flow
+- Missing env → fill \`tmail\` MCP env block (IDE config), reload MCP host, user "ready" → bind flow
 - Incomplete bootstrap → tmail_e2ee_generate_local → tmail_e2ee_register
 - AUTH_NEEDS_LOGIN → tmail_sub_login (no bind_invite)
 - Never use owner api_key (tmail_o_*) in sub-agent env/session
@@ -36,8 +43,8 @@ const ANTI_BYPASS = `## TMail anti-bypass (mandatory)
 - Mail: tmail_send_letter, tmail_list_threads, tmail_fetch_thread
 - Skills: install via \`npx skills add github.com/torganization-ae/tmail-mcp\`
 - curl REST = fallback only when MCP server offline
-- Reload your MCP host after filling mcpServers.tmail.env
-- MCP config: \`npx @tmail/mcp init <api_url>\` auto-merges into detected IDE MCP config(s)`;
+- Reload your MCP host after filling the \`tmail\` MCP env block
+- MCP config: \`npx @tmail/mcp init <api_url>\` — pick installed MCP host(s) interactively`;
 
 function loadBundledAgentGate(apiUrl: string): string {
   const bundled = path.join(packageRoot(), 'agent-gate.md');
@@ -77,90 +84,58 @@ function ensureGitignoreEntries(gitignorePath: string, entries: string[]): void 
 }
 
 
-const DEFAULT_TMAIL_BLOCK = {
-  tmail: {
-    command: 'npx',
-    args: ['-y', '@tmail/mcp'],
-    env: {
-      TMAIL_API_URL: 'https://your-api.example.com',
-      TMAIL_MAIN_DIR: '.tmail',
-      TMAIL_BIND_INVITE: '',
-    },
-  },
-} as const;
 
-function buildTmailBlock(apiUrl?: string): Record<string, unknown> {
-  const tmail = {
-    ...DEFAULT_TMAIL_BLOCK.tmail,
-    env: { ...DEFAULT_TMAIL_BLOCK.tmail.env },
-  } as Record<string, unknown>;
-  const env = { ...(tmail.env as Record<string, string>) };
-  delete env.TMAIL_PROJECT_ROOT;
-  if (apiUrl) {
-    env.TMAIL_API_URL = apiUrl;
-  }
-  tmail.env = env;
-  return { tmail };
-}
+function parseMcpCommandOptions(
+  argv: string[],
+  flags: Record<string, string | boolean>,
+  opts: { includeSkipMcpConfig?: boolean; collectPositional?: boolean } = {},
+): {
+  explicitConfig?: string;
+  explicitRootKey?: string;
+  explicitHostIds: string[];
+  skipMcpConfig: boolean;
+  force: boolean;
+  yes: boolean;
+  positional: string[];
+} {
+  let explicitConfig: string | undefined;
+  let explicitRootKey: string | undefined;
+  let explicitHostIds: string[] = [];
+  let skipMcpConfig = Boolean(flags['skip-mcp-config']);
+  let yes = Boolean(flags.y || flags.yes);
+  const positional: string[] = [];
 
-function mergeEnv(
-  oldEnv: Record<string, string>,
-  newEnv: Record<string, string>,
-  preferIncoming: string[] = [],
-): Record<string, string> {
-  const prefer = new Set(preferIncoming);
-  const result = { ...newEnv };
-  for (const [key, value] of Object.entries(oldEnv || {})) {
-    if (key === 'TMAIL_PROJECT_ROOT') continue;
-    if (prefer.has(key)) continue;
-    if (String(value ?? '').trim() !== '') result[key] = value;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (opts.includeSkipMcpConfig && arg === '--skip-mcp-config') {
+      skipMcpConfig = true;
+    } else if (arg === '--config' && argv[i + 1]) {
+      explicitConfig = argv[++i];
+    } else if (arg === '--root-key' && argv[i + 1]) {
+      explicitRootKey = argv[++i];
+    } else if ((arg === '--host' || arg === '-a') && argv[i + 1]) {
+      explicitHostIds = parseHostIds(argv[++i]);
+    } else if (arg === '-y' || arg === '--yes') {
+      yes = true;
+    } else if (opts.collectPositional && !arg.startsWith('-')) {
+      positional.push(arg);
+    }
   }
-  delete result.TMAIL_PROJECT_ROOT;
-  return result;
-}
 
-function mergeConfig(
-  cfg: Record<string, unknown>,
-  rootKey: string,
-  tmailBlock: Record<string, unknown>,
-  preferIncomingEnv: string[] = [],
-) {
-  const root = { ...cfg };
-  const servers = (root[rootKey] as Record<string, unknown>) ?? {};
-  const existing = (servers.tmail as Record<string, unknown>) ?? {};
-  const incoming = ((tmailBlock.tmail as Record<string, unknown>) ?? {}) as Record<string, unknown>;
-  const oldEnv = (existing.env as Record<string, string>) ?? {};
-  const newEnv = (incoming.env as Record<string, string>) ?? {};
-  servers.tmail = { ...existing, ...incoming, env: mergeEnv(oldEnv, newEnv, preferIncomingEnv) };
-  root[rootKey] = servers;
-  return root;
-}
+  if (typeof flags.config === 'string') explicitConfig = flags.config;
+  if (typeof flags['root-key'] === 'string') explicitRootKey = flags['root-key'];
+  if (typeof flags.host === 'string') explicitHostIds = parseHostIds(flags.host);
+  if (typeof flags.agent === 'string') explicitHostIds = parseHostIds(flags.agent);
 
-async function mergeTmailMcpConfig(opts: {
-  projectRoot: string;
-  configPath: string;
-  rootKey: string;
-  apiUrl?: string;
-  force?: boolean;
-  preferIncomingEnv?: string[];
-}): Promise<string> {
-  const projectRoot = path.resolve(opts.projectRoot);
-  const resolved = path.resolve(projectRoot, opts.configPath);
-  const rel = path.relative(projectRoot, resolved);
-  if (!opts.force && (rel.startsWith('..') || path.isAbsolute(rel))) {
-    throw new Error(`config path must be inside project root (${projectRoot}); use --force to override`);
-  }
-  const tmailBlock = buildTmailBlock(opts.apiUrl);
-  let cfg: Record<string, unknown> = {};
-  if (fs.existsSync(resolved)) {
-    cfg = JSON.parse(fs.readFileSync(resolved, 'utf8')) as Record<string, unknown>;
-  }
-  const merged = mergeConfig(cfg, opts.rootKey, tmailBlock, opts.preferIncomingEnv ?? []);
-  await fs.promises.mkdir(path.dirname(resolved), { recursive: true });
-  const tmp = `${resolved}.tmp.${process.pid}`;
-  await fs.promises.writeFile(tmp, JSON.stringify(merged, null, 2) + '\n');
-  await fs.promises.rename(tmp, resolved);
-  return resolved;
+  return {
+    explicitConfig,
+    explicitRootKey,
+    explicitHostIds,
+    skipMcpConfig,
+    force: Boolean(flags.force),
+    yes,
+    positional,
+  };
 }
 
 function resolveInitOptions(
@@ -170,34 +145,75 @@ function resolveInitOptions(
   apiUrl: string;
   explicitConfig?: string;
   explicitRootKey?: string;
+  explicitHostIds: string[];
   skipMcpConfig: boolean;
   force: boolean;
+  yes: boolean;
 } {
-  let explicitConfig: string | undefined;
-  let explicitRootKey: string | undefined;
-  let skipMcpConfig = Boolean(flags['skip-mcp-config']);
-  const positional: string[] = [];
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === '--skip-mcp-config') {
-      skipMcpConfig = true;
-    } else if (arg === '--config' && argv[i + 1]) {
-      explicitConfig = argv[++i];
-    } else if (arg === '--root-key' && argv[i + 1]) {
-      explicitRootKey = argv[++i];
-    } else if (!arg.startsWith('-')) {
-      positional.push(arg);
-    }
+  const parsed = parseMcpCommandOptions(argv, flags, { includeSkipMcpConfig: true, collectPositional: true });
+  const apiUrl = (parsed.positional[0] || '').replace(/\/+$/, '');
+  return {
+    apiUrl,
+    explicitConfig: parsed.explicitConfig,
+    explicitRootKey: parsed.explicitRootKey,
+    explicitHostIds: parsed.explicitHostIds,
+    skipMcpConfig: parsed.skipMcpConfig,
+    force: parsed.force,
+    yes: parsed.yes,
+  };
+}
+
+async function resolveMcpTargetsForInit(
+  projectRoot: string,
+  opts: {
+    explicitConfig?: string;
+    explicitRootKey?: string;
+    explicitHostIds: string[];
+    yes: boolean;
+  },
+): Promise<McpHost[]> {
+  const resolved = resolveMcpInitTargets(projectRoot, {
+    explicitConfig: opts.explicitConfig,
+    explicitRootKey: opts.explicitRootKey,
+    explicitHostIds: opts.explicitHostIds,
+  });
+  if (resolved.length > 0) {
+    return resolved;
   }
-  if (typeof flags.config === 'string') explicitConfig = flags.config;
-  if (typeof flags['root-key'] === 'string') explicitRootKey = flags['root-key'];
-  const apiUrl = (positional[0] || '').replace(/\/+$/, '');
-  return { apiUrl, explicitConfig, explicitRootKey, skipMcpConfig, force: Boolean(flags.force) };
+
+  if (opts.explicitHostIds.some(isManualMcpHostId)) {
+    return [];
+  }
+
+  const lock = readHostLock(projectRoot);
+  if (lock?.hosts.length && lock.hosts.every(isManualMcpHostId)) {
+    return [];
+  }
+
+  if (opts.yes) {
+    throw new Error(
+      'no MCP config to merge non-interactively — use --host cursor (or vscode, windsurf, …), --host other for manual setup, or run without -y to pick from installed hosts',
+    );
+  }
+
+  if (!isInteractiveTTY()) {
+    throw new Error(
+      'MCP host selection requires an interactive terminal — use --host cursor (or vscode, windsurf, …), --host other for manual setup, or create .tmail/host-lock.json',
+    );
+  }
+
+  const installed = detectInstalledMcpHosts();
+  const selected = await promptSelectMcpHosts(installed);
+  if (selected.length === 0) {
+    return [];
+  }
+  writeHostLock(projectRoot, selected.map((target) => target.id));
+  return selected;
 }
 
 async function mergeMcpTargets(
   projectRoot: string,
-  targets: McpHostTarget[],
+  targets: McpHost[],
   apiUrl: string,
   force: boolean,
 ): Promise<string[]> {
@@ -208,6 +224,8 @@ async function mergeMcpTargets(
       projectRoot,
       configPath: target.configPath,
       rootKey: target.rootKey,
+      writer: target.writer,
+      needsStdioType: target.needsStdioType,
       apiUrl,
       force,
       preferIncomingEnv: ['TMAIL_API_URL'],
@@ -218,9 +236,14 @@ async function mergeMcpTargets(
 }
 
 export async function runInit(argv: string[], flags: Record<string, string | boolean> = {}): Promise<void> {
-  const { apiUrl, explicitConfig, explicitRootKey, skipMcpConfig, force } = resolveInitOptions(argv, flags);
+  const { apiUrl, explicitConfig, explicitRootKey, explicitHostIds, skipMcpConfig, force, yes } = resolveInitOptions(
+    argv,
+    flags,
+  );
   if (!apiUrl) {
-    throw new Error('Usage: npx @tmail/mcp init <api_url> [--config ./path/mcp.json] [--skip-mcp-config]');
+    throw new Error(
+      'Usage: npx @tmail/mcp init <api_url> [--host cursor] [--config ./path/mcp.json] [--skip-mcp-config] [-y]',
+    );
   }
   let parsed: URL;
   try {
@@ -268,15 +291,22 @@ export async function runInit(argv: string[], flags: Record<string, string | boo
 
   let mcpLines = '';
   if (!skipMcpConfig) {
-    const targets = resolveMcpInitTargets(projectRoot, {
-      explicitConfig,
-      explicitRootKey,
-    });
-    if (targets.length === 0) {
-      mcpLines = `  - (no IDE MCP config detected — run npx @tmail/mcp init <api_url> or add tmail block manually)\n\nKnown host paths:\n${formatMcpHostHints()}`;
-    } else {
+    try {
+      const targets = await resolveMcpTargetsForInit(projectRoot, {
+        explicitConfig,
+        explicitRootKey,
+        explicitHostIds,
+        yes,
+      });
       const merged = await mergeMcpTargets(projectRoot, targets, apiUrl, force);
-      mcpLines = merged.map((rel) => `  - ${rel} (tmail block, TMAIL_API_URL=${apiUrl})`).join('\n');
+      if (merged.length === 0) {
+        mcpLines = `  - (manual MCP setup — configure tmail block yourself)\n\n${MCP_MANUAL_SETUP_HINT}`;
+      } else {
+        mcpLines = merged.map((rel) => `  - ${rel} (tmail block, TMAIL_API_URL=${apiUrl})`).join('\n');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      mcpLines = `  - (MCP config skipped: ${message})\n\nKnown host paths:\n${formatMcpHostHints()}`;
     }
   } else {
     mcpLines = '  - (skipped MCP config — run npx @tmail/mcp configure or add tmail block manually)';
@@ -297,24 +327,20 @@ Next:
 }
 
 export async function runConfigure(argv: string[], flags: Record<string, string | boolean>): Promise<void> {
-  let explicitConfig: string | undefined;
-  let explicitRootKey: string | undefined;
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--config' && argv[i + 1]) explicitConfig = argv[++i];
-    else if (argv[i] === '--root-key' && argv[i + 1]) explicitRootKey = argv[++i];
-  }
-  if (typeof flags.config === 'string') explicitConfig = flags.config;
-  if (typeof flags['root-key'] === 'string') explicitRootKey = flags['root-key'];
+  const { explicitConfig, explicitRootKey, explicitHostIds, yes, force } = parseMcpCommandOptions(argv, flags);
 
   const projectRoot = process.cwd();
-  const targets = resolveMcpInitTargets(projectRoot, {
+  const targets = await resolveMcpTargetsForInit(projectRoot, {
     explicitConfig,
     explicitRootKey,
+    explicitHostIds,
+    yes,
   });
   if (targets.length === 0) {
-    throw new Error(`no MCP host config detected; use --config or create one of:\n${formatMcpHostHints()}`);
+    process.stderr.write(`manual MCP setup:\n\n${MCP_MANUAL_SETUP_HINT}\n`);
+    return;
   }
-  const merged = await mergeMcpTargets(projectRoot, targets, '', Boolean(flags.force));
+  const merged = await mergeMcpTargets(projectRoot, targets, '', force);
   for (const rel of merged) {
     process.stdout.write(`merged tmail → ${path.join(projectRoot, rel)}\n`);
   }
@@ -329,7 +355,7 @@ export async function runDoctor(strict: boolean): Promise<void> {
     const mode = st.mode & 0o777;
     if (mode & 0o077) {
       process.stdout.write(
-        `WARN  legacy ${ENV_FILE_NAME} mode ${mode.toString(8)} — use mcpServers.tmail.env; remove file or chmod 0600\n`,
+        `WARN  legacy ${ENV_FILE_NAME} mode ${mode.toString(8)} — use tmail MCP env in IDE config; remove file or chmod 0600\n`,
       );
       issues++;
     }
@@ -356,7 +382,7 @@ export async function runDoctor(strict: boolean): Promise<void> {
 
   if (process.env[ENV_PROJECT_ROOT]?.trim()) {
     process.stdout.write(
-      `WARN  ${ENV_PROJECT_ROOT} is deprecated — remove from mcpServers.tmail.env; use TMAIL_MAIN_DIR only (IDE cwd = project root)\n`,
+      `WARN  ${ENV_PROJECT_ROOT} is deprecated — remove from tmail MCP env; use TMAIL_MAIN_DIR only (IDE cwd = project root)\n`,
     );
     issues++;
   }

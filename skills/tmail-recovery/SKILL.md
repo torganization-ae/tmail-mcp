@@ -7,7 +7,7 @@ description: "Recovery only after Env Gate passed — rotate/revoke, lost keys, 
 
 Use this skill when normal auth flow is broken, keys are lost/revoked, or local `.tmail` paths are inconsistent.
 
-**Not for first-time setup:** If `TMAIL_API_URL` is empty in mcpServers.tmail.env or user never completed bind → use **tmail-agent-setup** Env Gate + bootstrap, **not** this skill.
+**Not for first-time setup:** If `TMAIL_API_URL` is empty in the `tmail` MCP env block or user never completed bind → use **tmail-agent-setup** Env Gate + bootstrap, **not** this skill.
 
 **§SetupNotRecovery:** Do not use this skill when `TMAIL_BIND_INVITE` is empty and no bound profile exists under `.tmail/<wallet_slug>/profile` — that is first-time setup, not recovery. Do not use refresh/login to bypass missing bind_invite.
 

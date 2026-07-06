@@ -162,11 +162,11 @@ function collectWarnings(cfg: Config, paths: ProfilePaths): string[] {
 function waitEnvBindMessages(apiURL: string, bindInvite: string): string[] {
   const msgs = ['WAIT_ENV_BIND'];
   if (!apiURL) {
-    msgs.push('Set TMAIL_API_URL in mcpServers.tmail.env (or .env.tmail for CLI gate)');
+    msgs.push('Set TMAIL_API_URL in the tmail MCP env block (IDE config, or .env.tmail for CLI gate)');
     msgs.push('CLI note: npx @tmail/mcp gate does not read .cursor/mcp.json — export env or use .env.tmail');
   }
   if (!bindInvite) {
-    msgs.push('Fill TMAIL_BIND_INVITE (tmail_i_* from owner bundle) in mcpServers.tmail.env');
+    msgs.push('Fill TMAIL_BIND_INVITE (tmail_i_* from owner bundle) in the tmail MCP env block');
   }
   msgs.push('Reload MCP host after changes, then reply "ready"');
   msgs.push('Bind via MCP: tmail_generate_payload → @ton/mcp → tmail_sub_bind');
@@ -382,7 +382,7 @@ export function formatGateActionError(res: GateResult): string {
   if (actionable.length) return actionable.join('\n');
   switch (res.status) {
     case 'WAIT_ENV_BIND':
-      return 'Set TMAIL_API_URL and TMAIL_BIND_INVITE in mcpServers.tmail.env, reload MCP host';
+      return 'Set TMAIL_API_URL and TMAIL_BIND_INVITE in the tmail MCP env block, reload MCP host';
     case 'SETUP_BIND':
       return 'Bind wallet: tmail_generate_payload → @ton/mcp → tmail_sub_bind';
     case 'SETUP_FINISH':

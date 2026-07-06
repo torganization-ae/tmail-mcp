@@ -158,7 +158,7 @@ export async function subBind(rt: Runtime, args: Record<string, unknown>): Promi
   let bindInvite = optionalString(args, 'bind_invite');
   if (!bindInvite.trim()) bindInvite = rt.cfg.bindInvite;
   if (!bindInvite) {
-    return textError('bind_invite is required (tool arg or TMAIL_BIND_INVITE in mcpServers.tmail.env)');
+    return textError('bind_invite is required (tool arg or TMAIL_BIND_INVITE in tmail MCP env)');
   }
   const flatRaw = optionalString(args, 'ton_proof_json');
   if (!flatRaw) return textError('ton_proof_json is required (flat @ton/mcp generate_ton_proof JSON)');

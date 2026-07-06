@@ -7,7 +7,9 @@ description: "Env Gate first — connect agent to TMail REST API; bind invite, A
 
 **Primary execution:** use `tmail_*` MCP tools via `npx @tmail/mcp` (stdio). Skills define policy; MCP executes API calls.
 
-**Setup:** `npx -y @tmail/mcp@1.0.0 init "$TMAIL_API_URL"` → `.tmail/` scaffold + auto-detected IDE MCP config.
+**Setup:** `npx -y @tmail/mcp@1.0.0 init <API_URL_TMAIL>` → `.tmail/` scaffold + auto-detected IDE MCP config.
+
+**Placeholder:** `<API_URL_TMAIL>` — your real TMail API base URL (with `https://`). In TON proof `domain` fields use only the hostname (no scheme/path).
 
 **Fallback:** raw HTTPS to `TMAIL_API_URL` only when MCP server is offline.
 
@@ -15,7 +17,7 @@ description: "Env Gate first — connect agent to TMail REST API; bind invite, A
 
 **Prerequisite:** TON wallet available for TonProof — typically `@ton/mcp` in the agent IDE ([agents.ton.org](https://agents.ton.org/)).
 
-**Storage policy:** never hardcode profile roots. **`mcpServers.tmail.env`** stores only **global** settings (`TMAIL_MAIN_DIR`, default `.tmail`). Per-wallet paths are **derived at runtime** from `wallet_slug(sub_address)` — never pinned in MCP env.
+**Storage policy:** never hardcode profile roots. The **`tmail` MCP server env block** (name varies by IDE — see **MCP host config**) stores only **global** settings (`TMAIL_MAIN_DIR`, default `.tmail`). Per-wallet paths are **derived at runtime** from `wallet_slug(sub_address)` — never pinned in MCP env.
 
 **Path resolution (mandatory for all skills):**
 
@@ -61,7 +63,7 @@ Before bind: no profile folder on disk. After bind/login: MCP creates `${TMAIL_M
 
 ## Inputs
 
-- `TMAIL_API_URL` — TMail API host (from `mcpServers.tmail.env`).
+- `TMAIL_API_URL` — TMail API host (from **`tmail` MCP env block** in your IDE config).
 - Owner-issued `TMAIL_BIND_INVITE` (reusable `tmail_i_*` from owner key bundle; required before first bind).
 - `TMAIL_MAIN_DIR` — storage root in MCP env (default `.tmail`); **not** a per-wallet path.
 - Derived at runtime (never in MCP env): `$TMAIL_PROFILE_DIR` from `tmail_profile_dir(TMAIL_MAIN_DIR, sub_address)`.
@@ -70,15 +72,68 @@ Before bind: no profile folder on disk. After bind/login: MCP creates `${TMAIL_M
 
 **Rule:** one sub TON wallet = one folder `${TMAIL_MAIN_DIR}/<wallet_slug>/`. Name comes **only** from wallet address, never from IDE name or random slug.
 
-### Global MCP env (mcpServers.tmail.env — shared by all sub wallets)
+### Global MCP env (`tmail` server block — shared by all sub wallets)
+
+Same three variables in every host; only the **config file path** and **JSON/TOML shape** differ (see table below).
 
 ```bash
-TMAIL_API_URL=https://<host>
+TMAIL_API_URL=<API_URL_TMAIL>
 TMAIL_BIND_INVITE=<tmail_i_* from owner>   # first bind only
 TMAIL_MAIN_DIR=.tmail                      # parent storage root (default)
 ```
 
 Do **not** put `TMAIL_PROFILE_DIR` in MCP env — it blocks multi-wallet use.
+
+### MCP host config (where `tmail` env lives)
+
+Run **`npx @tmail/mcp init <api_url>`** in the project — it merges a `tmail` server block into the correct file for your IDE. Then fill env vars and **Reload MCP host**.
+
+| IDE / CLI | Project config file | Server entry | Env field name |
+|---|---|---|---|
+| Cursor | `.cursor/mcp.json` | `mcpServers.tmail` | `env` |
+| VS Code / GitHub Copilot | `.vscode/mcp.json` | `servers.tmail` | `env` (+ `"type": "stdio"`) |
+| Windsurf | `.windsurf/mcp.json` | `mcpServers.tmail` | `env` |
+| Cline | `.cline/mcp.json` | `mcpServers.tmail` | `env` |
+| Continue | `.continue/mcpServers/mcp.json` | `mcpServers.tmail` | `env` |
+| Claude Code / OpenClaw | `.mcp.json` | `mcpServers.tmail` | `env` |
+| Gemini CLI | `.gemini/settings.json` | `mcpServers.tmail` | `env` |
+| Qwen Code | `.qwen/settings.json` | `mcpServers.tmail` | `env` |
+| Roo Code | `.roo/mcp.json` | `mcpServers.tmail` | `env` |
+| Kilo Code | `.kilocode/mcp.json` | `mcpServers.tmail` | `env` |
+| Warp | `.warp/mcp.json` | `mcpServers.tmail` | `env` |
+| Pi | `.pi/mcp.json` | `mcpServers.tmail` | `env` |
+| Trae / Trae CN | `.trae/mcp.json` | `mcpServers.tmail` | `env` |
+| Codex CLI | `.codex/config.toml` | `[mcp_servers.tmail]` | `env` (TOML table) |
+| OpenCode | `opencode.json` | `mcp.tmail` | `environment` |
+| Zed | `.zed/settings.json` | `context_servers.tmail` | `env` (+ `"source": "custom"`) |
+
+**Cursor-style example** (most JSON hosts use the same `mcpServers` shape):
+
+```json
+{
+  "mcpServers": {
+    "tmail": {
+      "command": "npx",
+      "args": ["-y", "@tmail/mcp"],
+      "env": {
+        "TMAIL_API_URL": "<API_URL_TMAIL>",
+        "TMAIL_MAIN_DIR": ".tmail",
+        "TMAIL_BIND_INVITE": ""
+      }
+    }
+  }
+}
+```
+
+**VS Code / Copilot:** same env keys under `servers.tmail` with `"type": "stdio"`.
+
+**OpenCode:** env keys under `mcp.tmail.environment`; `command` is an array.
+
+**Codex:** TOML section `[mcp_servers.tmail.env]` with string values.
+
+**Zed:** env keys under `context_servers.tmail.env`; include `"source": "custom"` and non-empty `"args"`.
+
+Override init target: `--host cursor` (or `vscode`, `codex`, `opencode`, `zed`, …). Custom path: `--config ./path --root-key mcpServers`.
 
 ### Derived paths (computed on the fly)
 
@@ -224,7 +279,7 @@ Read, send, and webhook flows use **live API + in-memory decrypt** only. **No** 
 
 **Source of truth (only):**
 
-1. `mcpServers.tmail.env` → `TMAIL_MAIN_DIR`, `TMAIL_BIND_INVITE`, `TMAIL_API_URL` (global only)
+1. **`tmail` MCP env block** → `TMAIL_MAIN_DIR`, `TMAIL_BIND_INVITE`, `TMAIL_API_URL` (global only)
 2. Derived paths from `tmail_profile_dir(TMAIL_MAIN_DIR, sub_address)` and files at those paths only
 
 **Forbidden:**
@@ -246,7 +301,7 @@ Read, send, and webhook flows use **live API + in-memory decrypt** only. **No** 
 
 ## Env Gate (when tools report missing env)
 
-Resolve env: **`mcpServers.tmail.env`** (IDE MCP host process env).
+Resolve env: **`tmail` MCP server block** in your IDE config (process env after Reload MCP host).
 
 | Variable | Required when | Default if unset |
 |---|---|---|
@@ -268,15 +323,17 @@ flowchart TD
 
 Create these in the **agent project root**:
 
-**1. Ensure `mcpServers.tmail.env`** (user fills in IDE MCP config):
+**1. Ensure `tmail` MCP env** (user fills in IDE config — see **MCP host config** table):
 
 ```json
 {
-  "TMAIL_API_URL": "https://your-api.example.com",
+  "TMAIL_API_URL": "<API_URL_TMAIL>",
   "TMAIL_MAIN_DIR": ".tmail",
   "TMAIL_BIND_INVITE": ""
 }
 ```
+
+(Place these keys inside the host-specific `env` / `environment` object on the `tmail` server entry, not at the file root.)
 
 `TMAIL_MAIN_DIR` is the only storage path variable — relative to workspace cwd (default `.tmail`) or absolute. Do not set `TMAIL_PROJECT_ROOT` (removed; IDE cwd = project root).
 
@@ -305,13 +362,13 @@ Also append the same content into `AGENTS.md` between `<!-- tmail-env-gate:start
 When Env Gate stops, output **only** this class of information — no API calls, no bind/login, no mail until env is fixed:
 
 1. **What was created** — list every new file and directory.
-2. **What the user must fill in `mcpServers.tmail.env`:**
+2. **What the user must fill in the `tmail` MCP env block:**
    - `TMAIL_API_URL` — TMail API base URL.
    - `TMAIL_BIND_INVITE` — `tmail_i_*` from owner bundle. Owner shares OOB; agent cannot generate it.
 3. **How owner gets `bind_invite`:** owner TON Proof → `POST /api/acc/keys/owner` → copy `bind_invite`.
 4. **Prerequisite for bind:** `@ton/mcp` with `generate_ton_proof` in the agent IDE.
 5. **Next step for user:** fill MCP env, **Reload MCP host**, reply **"ready"** / **"env is set"**.
-6. **Explicit stop:** "Waiting for you to fill mcpServers.tmail.env. I will not proceed with further steps."
+6. **Explicit stop:** "Waiting for you to fill the `tmail` MCP env block. I will not proceed with further steps."
 
 Do not continue until the user confirms env is filled.
 
@@ -341,7 +398,7 @@ Do not continue until the user confirms env is filled.
 
 | Failure | Action |
 |---|---|
-| `TMAIL_API_URL` empty in mcpServers.tmail.env | do not call API; tell user to set URL in MCP config; Reload MCP host; **STOP and wait** |
+| `TMAIL_API_URL` empty in `tmail` MCP env | do not call API; tell user to set URL in IDE MCP config; Reload MCP host; **STOP and wait** |
 | `TMAIL_BIND_INVITE` empty and no `session.json` api_key | do not bind; tell user how owner issues invite; **STOP and wait** |
 | user has not confirmed env filled | do not proceed to bind/auth/mail; **STOP and wait** |
 | `@ton/mcp` unavailable and first bind required | tell user to install TON MCP; **STOP and wait** |
@@ -374,7 +431,7 @@ Full owner flow is documented in **tmail-owner-setup**.
 One command in the **current project directory** (where the agent runs):
 
 ```bash
-npx -y @tmail/mcp@1.0.0 init https://<host>
+npx -y @tmail/mcp@1.0.0 init <API_URL_TMAIL>
 ```
 
 Creates in **cwd**:
@@ -382,7 +439,7 @@ Creates in **cwd**:
 - `AGENTS.md` section between `tmail-env-gate` markers (if missing, creates file)
 - `.gitignore` entry for `.tmail/` (no pre-bind profile folder)
 
-MCP host config: **`npx @tmail/mcp init <api_url>`** auto-detects IDE config (existing `mcp.json`, runtime, or `.vscode/` / `.cursor/` markers). Override: `--config ./path/mcp.json --root-key servers`.
+MCP host config: **`npx @tmail/mcp init <api_url>`** picks your IDE interactively and writes the correct `tmail` block (JSON, TOML, or host-native schema). Override: `--host cursor`, `--config ./path/mcp.json --root-key servers`.
 
 Optional: install skills from the package:
 
@@ -394,12 +451,12 @@ npx skills add @tmail/mcp
 
 ---
 
-## 3. Agent environment (mcpServers.tmail.env)
+## 3. Agent environment (`tmail` MCP env block)
 
-Primary: `mcpServers.tmail.env` in IDE MCP config.
+Primary: env vars on the **`tmail` MCP server entry** in your IDE config (see **MCP host config** table).
 
 ```bash
-TMAIL_API_URL=https://<host>
+TMAIL_API_URL=<API_URL_TMAIL>
 TMAIL_BIND_INVITE=<from owner bundle>
 TMAIL_MAIN_DIR=.tmail
 ```
@@ -453,7 +510,7 @@ Add to `.gitignore`:
 
 ```json
 {
-  "api_url": "https://<host>",
+  "api_url": "<API_URL_TMAIL>",
   "agent_id": "cursor-agent-2q30gq",
   "agent_name": "trader-bot",
   "wallet_address": "0:<64_hex>",
@@ -523,7 +580,7 @@ When active profile does not own the mailbox/thread (wrong `reply_from_address`,
 ## 6. First session (once per wallet)
 
 1. **`tmail_generate_payload`** → `{ "payload": "<hex>" }`
-2. `@ton/mcp` `generate_ton_proof` with `{ "domain": "<host>", "payload": "<hex>" }`
+2. `@ton/mcp` `generate_ton_proof` with `{ "domain": "<API_URL_TMAIL hostname>", "payload": "<hex>" }`
 2b. **`tmail_sub_bind`** / **`tmail_sub_login`**: `ton_proof_json` = flat proof JSON string (see **tmail-sub-agent-auth → Step 2b**). Do not nest manually.
 3. REST fallback only: map flat MCP → nested API proof (**tmail-sub-agent-auth → Step 3**)
 4. First time: bind with `bind_invite` + proof (MCP tool or REST)
@@ -537,7 +594,7 @@ When active profile does not own the mailbox/thread (wrong `reply_from_address`,
 
 When user asks to initialize a sub-agent, run one bootstrap sequence (instead of asking user to manually create files):
 
-0. **Env Gate** — if blocked, instruct user to fill mcpServers.tmail.env, **stop** (no bind).
+0. **Env Gate** — if blocked, instruct user to fill `tmail` MCP env, **stop** (no bind).
 1. Load `TMAIL_MAIN_DIR`, compute `$TMAIL_PROFILE_DIR` via `tmail_profile_dir()` once `sub_address` is known from bind/login.
 2. If target profile `meta.json` exists and is valid, keep existing state.
 3. Ensure `$TMAIL_PROFILE_DIR` exists (post-bind).

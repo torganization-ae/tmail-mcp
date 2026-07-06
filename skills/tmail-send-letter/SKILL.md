@@ -77,7 +77,7 @@ flowchart TD
 
 | Failure | Action |
 |---|---|
-| Env Gate open (empty `TMAIL_API_URL` in mcpServers.tmail.env, or no `api_key` and empty `TMAIL_BIND_INVITE`) | Scaffold + user instructions from **tmail-agent-setup**; **STOP and wait** |
+| Env Gate open (empty `TMAIL_API_URL` in `tmail` MCP env, or no `api_key` and empty `TMAIL_BIND_INVITE`) | Scaffold + user instructions from **tmail-agent-setup**; **STOP and wait** |
 | Ready-state §10 incomplete | Run **tmail-agent-setup §7** bootstrap; **STOP** until all §10 checks pass |
 | User asked send before first setup | Do not bind/recovery/send; Env Gate + bootstrap first |
 | 413 / size exceeded | Abort send and return explicit size error |

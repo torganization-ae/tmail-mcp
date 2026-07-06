@@ -16,7 +16,9 @@ Optional diagnostic: **`tmail_gate_check`** or `npx @tmail/mcp gate [wallet_slug
 | Bind / login | `tmail_generate_payload` → `@ton/mcp generate_ton_proof` → `tmail_sub_bind` / `tmail_sub_login` |
 | E2EE | `tmail_e2ee_generate_local`, `tmail_e2ee_register` |
 
-## Global env (`mcpServers.tmail.env`)
+## Global env (`tmail` MCP server block)
+
+Path depends on IDE — see skill **tmail-agent-setup → MCP host config**. Same variables everywhere:
 
 ```json
 {
@@ -25,6 +27,8 @@ Optional diagnostic: **`tmail_gate_check`** or `npx @tmail/mcp gate [wallet_slug
   "TMAIL_BIND_INVITE": ""
 }
 ```
+
+(JSON: inside `mcpServers.tmail.env` or `servers.tmail.env`; OpenCode: `mcp.tmail.environment`; Codex: `[mcp_servers.tmail.env]`; Zed: `context_servers.tmail.env`.)
 
 Reload MCP host after env changes.
 

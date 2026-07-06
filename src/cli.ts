@@ -8,13 +8,18 @@ function printHelp(): void {
 Usage:
   npx @tmail/mcp                    Start stdio MCP server
   npx @tmail/mcp --http <port>       Start HTTP MCP on localhost (port required)
-  npx @tmail/mcp init <api_url>     Scaffold .tmail/ + auto-merge IDE MCP config
+  npx @tmail/mcp init <api_url>     Scaffold .tmail/ + merge IDE MCP config
+    --host cursor                     Pick MCP host (cursor, vscode, windsurf, …)
     --config ./path/mcp.json          Force a specific MCP config path
     --root-key mcpServers             Root key when using --config (VS Code: servers)
     --skip-mcp-config                 Skip MCP config merge (manual paste)
-  npx @tmail/mcp configure          Re-merge tmail block (auto-detect IDE config)
-    --config ./path/mcp.json          Force config path (default: auto-detect)
+    --force                           Allow config outside project root
+    -y, --yes                         Non-interactive (requires --host or .tmail/host-lock.json)
+  npx @tmail/mcp configure          Re-merge tmail block into MCP config
+    --host cursor                     MCP host when no project mcp.json exists yet
+    --config ./path/mcp.json          Force config path
     --force                         Allow config outside project root
+    -y, --yes                         Non-interactive (requires --host or .tmail/host-lock.json)
   npx @tmail/mcp gate [wallet]      Env gate check
   npx @tmail/mcp doctor [--strict]  Diagnostics
   npx @tmail/mcp e2ee-passphrase reveal|set|status <wallet_slug>
@@ -30,6 +35,7 @@ function parseFlags(argv: string[]): { flags: Record<string, string | boolean>; 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--force') flags.force = true;
+    else if (arg === '-y' || arg === '--yes') flags.yes = true;
     else if (arg === '--help' || arg === '-h') flags.help = true;
     else if (arg === '--strict') flags.strict = true;
     else if (arg === '--http') {

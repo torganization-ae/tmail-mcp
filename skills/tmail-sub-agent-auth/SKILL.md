@@ -168,7 +168,7 @@ Example MCP args:
 
 ```json
 {
-  "ton_proof_json": "{\"address\":\"0:...\",\"domainValue\":\"your-api.example.com\",\"domainLengthBytes\":20,\"timestamp\":1719054000,\"signature\":\"...\",\"walletStateInit\":\"...\",\"payload\":\"...\"}",
+  "ton_proof_json": "{\"address\":\"0:...\",\"domainValue\":\"<API_URL_TMAIL hostname>\",\"domainLengthBytes\":20,\"timestamp\":1719054000,\"signature\":\"...\",\"walletStateInit\":\"...\",\"payload\":\"...\"}",
   "payload": "<hex from tmail_generate_payload>",
   "name": "my-agent"
 }

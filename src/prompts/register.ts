@@ -13,7 +13,7 @@ export function registerPrompts(server: McpServer): void {
           content: {
             type: 'text',
             text: `Call the MCP tool the user needs — errors tell you what to fix next.
-1. Missing env: fill TMAIL_BIND_INVITE in mcpServers.tmail.env, reload MCP host, user confirms "ready".
+1. Missing env: fill TMAIL_BIND_INVITE in the tmail MCP env block, reload MCP host, user confirms "ready".
 2. Bind: tmail_generate_payload → @ton/mcp → tmail_sub_bind (MCP only; no Authorization header).
 3. E2EE: tmail_e2ee_generate_local(wallet_slug=..., register=true).
 4. Re-login: tmail_generate_payload → @ton/mcp → tmail_sub_login (no invite).
@@ -43,7 +43,7 @@ Wallets: tmail_list_wallets (pass wallet_slug when 2+ bound)
 - E2EE → tmail_e2ee_generate_local(register=true)
 - Re-login → tmail_sub_login (no invite)
 - Corrupt session → delete session.json, bind again
-- Hard STOP → fix TMAIL_API_URL in mcpServers.tmail.env, reload MCP host`,
+- Hard STOP → fix TMAIL_API_URL in the tmail MCP env block, reload MCP host`,
           },
         },
       ],

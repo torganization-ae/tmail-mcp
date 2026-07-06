@@ -6,13 +6,13 @@ MCP server for the TMail
 ## Quick start
 
 ```bash
-npx -y @tmail/mcp init <TMail API base URL>
+npx -y @tmail/mcp init <API_URL_TMAIL>
 
 npx skills add github.com/torganization-ae/tmail-mcp
 
 ```
 
-1. Set `TMAIL_BIND_INVITE` in `mcpServers.tmail.env`
+1. Set `TMAIL_BIND_INVITE` in the `tmail` MCP env block (see skill **tmail-agent-setup** for your IDE path)
 2. Reload your MCP host
 3. Run bind flow via `@ton/mcp` when a tool reports missing wallet/session
 4. Use `tmail_*` MCP tools
@@ -37,7 +37,7 @@ npx skills add github.com/torganization-ae/tmail-mcp
 
 ## Environment
 
-Set in `mcpServers.tmail.env`:
+Set in the **`tmail` MCP server env** (path varies by IDE — Cursor: `mcpServers.tmail.env`, VS Code: `servers.tmail.env`, OpenCode: `mcp.tmail.environment`, etc.):
 
 | Variable | Description |
 |----------|-------------|
