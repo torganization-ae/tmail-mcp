@@ -1,6 +1,6 @@
 {
   "name": "@tmail/mcp",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "TMail MCP Server — Model Context Protocol server for TMail agent mail API",
   "license": "MIT",
   "type": "module",
