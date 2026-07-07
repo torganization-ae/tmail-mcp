@@ -191,6 +191,16 @@
       "operation_id": "tbox-lookup-pub-keys"
     },
     {
+      "mcp_tool": "tmail_e2ee_decrypt_letters",
+      "disposition": "mcp_tool",
+      "gate_category": "mail_ops",
+      "scope": "mail:read",
+      "method": "POST",
+      "path": "/api/tbox/letters/fetch",
+      "operation_id": "tbox-fetch-letters",
+      "notes": "Auto-fetches letters with as_seceml:true, then decrypts client-side with local E2EE keys. Returns plaintext fields in memory — no disk cache."
+    },
+    {
       "mcp_tool": "tmail_nft_quote_mint",
       "disposition": "mcp_tool",
       "gate_category": "mail_ops",
