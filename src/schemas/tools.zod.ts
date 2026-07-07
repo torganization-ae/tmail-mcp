@@ -134,4 +134,13 @@ export const toolInputSchemas: Record<string, z.ZodRawShape> = {
     seen_flag: z.boolean(),
     mailbox: z.string().optional(),
   },
+  tmail_e2ee_decrypt_letters: {
+    ...walletSelectorSchema,
+    letter_ids: z.array(z.string()).optional().describe('Letter IDs to fetch and decrypt (max 100)'),
+    thread_id: z.string().optional().describe('Fetch and decrypt all letters in a thread'),
+    mailbox: z.string().optional(),
+    decrypt_attachments: z.boolean().optional().describe('Also decrypt attachment contents (default false)'),
+    mark_read: z.boolean().optional().describe('Pass through to API to mark letters as read (omit to let API decide, default true per API)'),
+    limit: z.number().optional().describe('Max letters to return (default all)'),
+  },
 };

@@ -22,6 +22,7 @@ import {
   sendLetter,
 } from './mail.js';
 import { e2eeGenerateLocal, e2eeGet, e2eeLookup, e2eeRegister, e2eePassphraseStatusTool, e2eePassphraseRevealTool, e2eeChangePassphraseTool } from './e2ee.js';
+import { e2eeDecryptLetters } from './e2ee-decrypt.js';
 import { nftPrepareMint, nftQuoteMint } from './nft.js';
 import { webhookDelete, webhookGet, webhookRotateSecret, webhookSet } from './webhooks.js';
 import { HUMAN_ONLY_ERROR } from './guard.js';
@@ -198,6 +199,13 @@ const TOOL_SPECS: ToolSpec[] = [
     policy: ResolvePolicy.ExplicitIfMulti,
     auth: AuthMode.Required,
     handler: (rt) => e2eeGet(rt),
+  },
+  {
+    name: 'tmail_e2ee_decrypt_letters',
+    description: 'Auto-fetch encrypted letters from API (as_seceml:true) and decrypt fields+attachments using local E2EE keys. Returns plaintext subject, body, from, to, and optionally attachment contents. One-step replacement for agent-side decrypt scripts.',
+    policy: ResolvePolicy.StrictExplicit,
+    auth: AuthMode.Required,
+    handler: (rt, args) => e2eeDecryptLetters(rt, args),
   },
   {
     name: 'tmail_e2ee_lookup',

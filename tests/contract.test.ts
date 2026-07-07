@@ -31,9 +31,9 @@ describe('tool schemas', () => {
 });
 
 describe('registry', () => {
-  it('exposes 27 MCP tools', async () => {
+  it('exposes 28 MCP tools', async () => {
     const { TOOL_SPECS } = await import('../src/tools/registry.js');
-    expect(TOOL_SPECS.length).toBe(27);
+    expect(TOOL_SPECS.length).toBe(28);
   });
 
   it('does not register tmail_e2ee_generate', async () => {
