@@ -50,7 +50,7 @@ Paths: **tmail-agent-setup → Path layout**.
    - **New mail only**, if still omitted → `meta.default_mailbox` (saved from mailboxes response at bootstrap).
 3. E2EE preflight: local `e2ee.json`, **`tmail_send_letter`** with `report_encryption:true`.
 4. Size/quota checks (**`tmail_get_limits`**, 25 MB guard).
-5. **`tmail_send_letter`** with resolved `from_address`, `thread_id`, `in_reply_to` when replying.
+5. **`tmail_send_letter`** with resolved `from_address`, `thread_id`, `in_reply_to` when replying. When `eml_base64` is not set, `to`/`to_list` and `body_html`/`body_plain` are required (MCP validates before API call).
 6. When `
 ```mermaid
 flowchart TD
@@ -67,7 +67,9 @@ flowchart TD
     limits --> lookup[POST /api/tbox/keys/lookup]
     lookup --> lookupOk{Lookup ok?}
     lookupOk -->|no| abortSend[Abort E2EE preflight]
-    lookupOk -->|yes| sendReq[POST /api/tbox/letters]
+    lookupOk -->|yes| mcpValidate{MCP validation: to/body required without eml_base64}
+    mcpValidate -->|fail| mcpErr[Return MCP error before API call]
+    mcpValidate -->|pass| sendReq[POST /api/tbox/letters]
     sendReq --> accepted{accepted?}
     accepted -->|no| failSend[Return failure]
     accepted -->|yes| doneSend[Return success with message_id]
@@ -82,6 +84,9 @@ flowchart TD
 | User asked send before first setup | Do not bind/recovery/send; Env Gate + bootstrap first |
 | 413 / size exceeded | Abort send and return explicit size error |
 | recipients invalid | Abort send with recipient validation error |
+| missing recipients without `eml_base64` | MCP returns error before API call: "to or to_list is required when eml_base64 is not provided" |
+| missing body without `eml_base64` | MCP returns error before API call: "body_html or body_plain is required when eml_base64 is not provided" |
+| invalid `attachments_json` | MCP returns error before API call: "attachments_json must be a JSON array of attachment objects" |
 | lookup failed | Abort send and return explicit E2EE preflight failure |
 | purchased mailbox not in mailboxes API for current wallet | **STOP** — switch to owning wallet profile; refetch `POST /api/tbox/mailboxes` |
 | from_address constructed manually | **STOP** — use `web3_address` from mailboxes ownership response only |
@@ -196,6 +201,8 @@ Authorization: Bearer <api_key>
 ```
 
 **E2EE is default.** Before sending: check `$TMAIL_PROFILE_DIR/e2ee.json` exists and `registered=true`, run `POST /api/tbox/keys/lookup` for recipient addresses, set `report_encryption:true`. Show user `encryption.fully_e2e` from response. If E2EE preflight fails, abort send and return explicit reason. Details: **tmail-e2ee**.
+
+**MCP-side validation (before API call):** when `eml_base64` is **not** set, MCP rejects early (no network round-trip) if `to`/`to_list` is empty or if both `body_html` and `body_plain` are empty. `eml_base64` bypasses these field-level requirements (the EML is self-contained). `attachments_json`, if provided, must parse as a JSON array.
 
 Encryption behavior (server-side): client sends plaintext JSON/EML to `/api/tbox/letters`; the server encrypts before storage. Details: **tmail-e2ee §10.1**.
 

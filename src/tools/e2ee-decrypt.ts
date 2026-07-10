@@ -12,12 +12,15 @@ import {
   type Runtime,
 } from './runtime.js';
 import {
-  safeDecryptLetter,
+  deriveLetterAesKey,
+  decryptLetterFields,
+  decryptAttachmentCore,
+  FALLBACK_LETTER,
   type DecryptedLetter,
 } from '../crypto/e2ee-decrypt.js';
 import {
   extractFailedLetterIds,
-  extractLetterResults,
+  extractLetterResultsWithIds,
 } from '../client/letter-results.js';
 
 async function loadE2EEProfile(rt: Runtime): Promise<{
@@ -66,6 +69,7 @@ async function loadE2EEProfile(rt: Runtime): Promise<{
 
 interface FetchResult {
   letters: Record<string, unknown>[];
+  letter_ids: string[];         // синхронизирован с letters[] по индексу
   total: number;
   fetch_error?: string;
   failed_letter_ids?: string[];
@@ -86,10 +90,10 @@ async function fetchLettersForDecrypt(rt: Runtime, args: Record<string, unknown>
   try {
     ids = requireStringArray(args, 'letter_ids');
   } catch {
-    return { letters: [], total: 0, fetch_error: 'letter_ids is required' };
+    return { letters: [], letter_ids: [], total: 0, fetch_error: 'letter_ids is required' };
   }
   if (ids.length > 100) {
-    return { letters: [], total: 0, fetch_error: 'letter_ids max 100' };
+    return { letters: [], letter_ids: [], total: 0, fetch_error: 'letter_ids max 100' };
   }
 
   const body: Record<string, unknown> = {
@@ -102,11 +106,12 @@ async function fetchLettersForDecrypt(rt: Runtime, args: Record<string, unknown>
 
   try {
     const out = await rt.client.post<Record<string, unknown>>('/api/tbox/letters/fetch', body);
-    const letters = extractLetterResults(out);
-    return { letters, total: letters.length, failed_letter_ids: extractFailedLetterIds(out) };
+    const { results: letters, letter_ids: letterIds } = extractLetterResultsWithIds(out);
+    return { letters, letter_ids: letterIds, total: letters.length, failed_letter_ids: extractFailedLetterIds(out) };
   } catch (err) {
     return {
       letters: [],
+      letter_ids: [],
       total: 0,
       fetch_error: err instanceof Error ? err.message : String(err),
     };
@@ -116,7 +121,7 @@ async function fetchLettersForDecrypt(rt: Runtime, args: Record<string, unknown>
 async function fetchThreadForDecrypt(rt: Runtime, args: Record<string, unknown>): Promise<FetchResult> {
   const threadId = optionalString(args, 'thread_id');
   if (!threadId) {
-    return { letters: [], total: 0, fetch_error: 'thread_id is required' };
+    return { letters: [], letter_ids: [], total: 0, fetch_error: 'thread_id is required' };
   }
 
   const body: Record<string, unknown> = {
@@ -129,11 +134,12 @@ async function fetchThreadForDecrypt(rt: Runtime, args: Record<string, unknown>)
 
   try {
     const out = await rt.client.post<Record<string, unknown>>('/api/tbox/threads/letters', body);
-    const letters = extractLetterResults(out);
-    return { letters, total: letters.length, failed_letter_ids: extractFailedLetterIds(out) };
+    const { results: letters, letter_ids: letterIds } = extractLetterResultsWithIds(out);
+    return { letters, letter_ids: letterIds, total: letters.length, failed_letter_ids: extractFailedLetterIds(out) };
   } catch (err) {
     return {
       letters: [],
+      letter_ids: [],
       total: 0,
       fetch_error: err instanceof Error ? err.message : String(err),
     };
@@ -191,7 +197,7 @@ export async function e2eeDecryptLetters(rt: Runtime, args: Record<string, unkno
     );
   }
 
-  // Decrypt each letter
+  // Decrypt each letter (two-phase: derive key → decrypt fields → fetch+decrypt attachments)
   const decryptedList: DecryptedLetter[] = [];
   let decryptedCount = 0;
   let failedCount = 0;
@@ -199,15 +205,74 @@ export async function e2eeDecryptLetters(rt: Runtime, args: Record<string, unkno
 
   for (let i = 0; i < max; i++) {
     const letter = fetchResult.letters[i];
-    const result = safeDecryptLetter({
-      letter,
-      myPubKeyBase64: e2ee.pubKeyBase64,
-      encPrivKeyBase64: e2ee.encPrivKeyBase64,
-      pbkdf2SaltBase64: e2ee.pbkdf2Salt,
-      pbkdf2Iterations: e2ee.pbkdf2Iterations,
-      passphrase: e2ee.passphrase,
-      decryptAttachments,
-    });
+
+    let aesKey: Buffer | null = null;
+    let result: DecryptedLetter;
+    try {
+      // Phase 1: derive AES key
+      const derived = deriveLetterAesKey(
+        letter, e2ee.pubKeyBase64, e2ee.encPrivKeyBase64,
+        e2ee.pbkdf2Salt, e2ee.pbkdf2Iterations, e2ee.passphrase,
+      );
+      aesKey = derived.aesKey;
+
+      // Phase 2: decrypt fields + attachment metadata
+      result = decryptLetterFields({ letter, ed: derived.ed, aesKey });
+
+      // Phase 3: fetch + decrypt attachment binary content
+      const attachmentsWithContent = result.attachments.filter(a => a.file_id);
+      if (decryptAttachments && attachmentsWithContent.length > 0) {
+        try {
+          const fileIds = attachmentsWithContent.map(a => a.file_id);
+          const encResp = await rt.client.post<Record<string, unknown>>(
+            '/api/tbox/attachments/encrypted',
+            { letter_id: result.letter_id, attachment_ids: fileIds, mailbox: optionalString(args, 'mailbox') },
+          );
+          const encResults = (encResp.results ?? []) as Array<Record<string, unknown>>;
+          const encMap = new Map<string, string>();
+          for (const r of encResults) {
+            const fid = typeof r.file_id === 'string' ? r.file_id : '';
+            const b64 = typeof r.encrypted_content_base64 === 'string' ? r.encrypted_content_base64 : '';
+            if (fid && b64) encMap.set(fid, b64);
+          }
+          for (const att of result.attachments) {
+            if (!att.file_id) continue;
+            const encB64 = encMap.get(att.file_id);
+            if (!encB64) {
+              att.decrypt_error = 'attachment not found in API response';
+              continue;
+            }
+            try {
+              const decBuf = decryptAttachmentCore(encB64, aesKey);
+              att.content_base64 = decBuf.toString('base64');
+              att.decrypt_ok = true;
+            } catch (err) {
+              att.decrypt_error = err instanceof Error ? err.message : String(err);
+            }
+          }
+        } catch (attachErr) {
+          // Network/API error fetching attachments — keep decrypted letter fields
+          const msg = attachErr instanceof Error ? attachErr.message : String(attachErr);
+          for (const att of result.attachments) {
+            if (att.file_id && !att.decrypt_ok) {
+              att.decrypt_error = `attachment fetch failed: ${msg}`;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      // deriveLetterAesKey or decryptLetterFields threw
+      const errMsg = err instanceof Error ? err.message : String(err);
+      result = { ...FALLBACK_LETTER };
+      if (errMsg.includes('not found in toList')) {
+        result.decrypt_error = 'encrypted-not-decryptable-for-this-identity — my pub key not in toList';
+      } else {
+        result.decrypt_error = errMsg;
+      }
+    } finally {
+      if (aesKey) aesKey.fill(0);
+    }
+
     if (result.decrypted) {
       decryptedCount++;
     } else {

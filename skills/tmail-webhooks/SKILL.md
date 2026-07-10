@@ -127,7 +127,7 @@ After signature OK, parse JSON. Actual `letter.incoming` payload (from server `l
 
 ### 6. Read after delivery
 
-1. Fetch thread by `data.thread_id` via `POST /api/tbox/threads/letters` with `as_seceml:true` (preferred over guessing letter IDs from `message_id`).
+1. Fetch thread by `data.thread_id` via `POST /api/tbox/threads/letters` with `as_seceml:true` (preferred over guessing letter IDs from `message_id`). For long threads, use `offset`/`limit` (MCP client-side paging; default returns all).
 2. Decrypt via **tmail-e2ee → Protocol steps 1–6**.
 3. Process in memory; notify user; no mail files on disk.
 4. For later reply: ensure `from` + `message_id` available to **tmail-send-letter → Reply in thread**.

@@ -8,9 +8,37 @@ const AES_NONCE_SIZE = 12;
 const SECRETBOX_NONCE_SIZE = 24;
 const CTR1_PREFIX = Buffer.from('CTR1');
 
+// --- NEW interfaces for attachment metadata, sender/recipient profiles ---
+
+export interface AttachmentMetaEncrypted {
+  fileID?: string;       // plain
+  filename?: string;     // AES-256-GCM
+  contentType?: string;  // AES-256-GCM
+  size?: string;         // plain, MB как строка
+  cid?: string;          // plain
+}
+
+export interface SenderAdditionalInfoEncrypted {
+  additionalInfoObject?: string;  // UsersAdditionalInfo → JSON → AES-256-GCM
+  displayName?: string;
+  logoAvatarUrl?: string;
+  avatarBase64?: string;
+  avatarColor?: string;
+  emojiAvatar?: string;
+  emojiStatus?: string;
+}
+
+export interface RecipientAdditionalInfoEncrypted {
+  additionalInfoObject?: string;  // RecipientAdditionalInfo → JSON → AES-256-GCM
+  profiles?: Record<string, Record<string, unknown>>;
+}
+
+// --- Core data structures ---
+
 export interface EncryptedData {
   uuid?: string;
   version?: string;
+  sign?: string;
   data: {
     subject?: string;
     plainText?: string;
@@ -19,15 +47,23 @@ export interface EncryptedData {
     to?: string[];
     messagesID?: string;
     message_id?: string;
+    inReplyTo?: string;
+    references?: string[];
+    timestamp?: number;
+    threadID?: string;
+    attachments?: AttachmentMetaEncrypted[];
+    senderAdditionalInfo?: SenderAdditionalInfoEncrypted;
+    recipientAdditionalInfo?: RecipientAdditionalInfoEncrypted;
     [key: string]: unknown;
   };
   toList: Record<string, string>;
 }
 
 export interface AttachmentMeta {
+  file_id: string;        // обязательное, из att.fileID
   name?: string;
   mime?: string;
-  size?: number;
+  size?: string;          // было number → string (как на бэкенде)
   content_id?: string;
 }
 
@@ -37,7 +73,23 @@ export interface DecryptedAttachment extends AttachmentMeta {
   decrypt_error?: string;
 }
 
+// --- Decrypted result types ---
+
+export interface SenderInfo {
+  display_name: string;
+  avatar_url: string;
+  avatar_base64: string;
+  avatar_color: string;
+  emoji_avatar: string;
+  emoji_status: string;
+}
+
+export interface RecipientProfiles {
+  [address: string]: SenderInfo;
+}
+
 export interface DecryptedLetter {
+  letter_id: string;
   subject: string;
   body_plain: string;
   body_html: string;
@@ -46,9 +98,30 @@ export interface DecryptedLetter {
   message_id: string;
   thread_id?: string;
   folder?: string;
+  in_reply_to: string;
+  references: string[];
+  timestamp: number;
+  sender: SenderInfo;
+  recipients: RecipientProfiles;
   decrypted: boolean;
   decrypt_error?: string;
   attachments: DecryptedAttachment[];
+}
+
+export interface DecryptLetterInput {
+  letter: Record<string, unknown>;
+  myPubKeyBase64: string;
+  encPrivKeyBase64: string;
+  pbkdf2SaltBase64: string;
+  pbkdf2Iterations: number;
+  passphrase: string;
+  decryptAttachments?: boolean;
+}
+
+export interface DecryptLetterFieldsInput {
+  letter: Record<string, unknown>;
+  ed: EncryptedData;
+  aesKey: Buffer;
 }
 
 /** Parse SECEML binary format → EncryptedData. */
@@ -198,7 +271,7 @@ function decryptFieldCore(encryptedBase64: string, aesKey: Buffer): string {
  * Primary format (§9): CTR1 (4 bytes) + IV (16 bytes) + ciphertext → AES-CTR decrypt → zstd decompress
  * Fallback: AES-GCM: nonce (12 bytes) + ciphertext
  */
-function decryptAttachmentCore(encryptedBase64: string, aesKey: Buffer): Buffer {
+export function decryptAttachmentCore(encryptedBase64: string, aesKey: Buffer): Buffer {
   const raw = Buffer.from(encryptedBase64, 'base64');
 
   // Check for CTR1 format (need header 4 + IV 16 = minimum 20 bytes)
@@ -252,158 +325,180 @@ function resolveMessageId(ed: EncryptedData): string {
   throw new Error('no uuid or message_id in EncryptedData');
 }
 
-export interface DecryptLetterInput {
-  letter: Record<string, unknown>;
-  myPubKeyBase64: string;
-  encPrivKeyBase64: string;
-  pbkdf2SaltBase64: string;
-  pbkdf2Iterations: number;
-  passphrase: string;
-  decryptAttachments?: boolean;
-}
+// ============================================================
+// Two-phase decryption: derive key (phase 1) + decrypt fields (phase 2)
+// The aesKey must NOT be zeroed inside these functions — the caller
+// (tool handler) needs the same key to decrypt attachment binaries.
+// ============================================================
 
-/** Full decrypt of a single letter. */
-export function decryptLetter(input: DecryptLetterInput): DecryptedLetter {
-  const {
-    letter,
-    myPubKeyBase64,
-    encPrivKeyBase64,
-    pbkdf2SaltBase64,
-    pbkdf2Iterations,
-    passphrase,
-    decryptAttachments = false,
-  } = input;
-
-  // Extract encrypted data
+/** Phase 1: parse SECEML, unlock private key, unwrap the per-letter AES key. */
+export function deriveLetterAesKey(
+  letter: Record<string, unknown>,
+  myPubKeyBase64: string,
+  encPrivKeyBase64: string,
+  pbkdf2SaltBase64: string,
+  pbkdf2Iterations: number,
+  passphrase: string,
+): { aesKey: Buffer; ed: EncryptedData; messageId: string } {
   const ed = extractEncryptedData(letter);
 
-  // Unlock private key
   const privateKey = unlockPrivateKey(encPrivKeyBase64, pbkdf2SaltBase64, pbkdf2Iterations, passphrase);
   if (privateKey.length !== 32) {
     throw new Error(`unlocked private key wrong size: ${privateKey.length} (expected 32)`);
   }
-  // §4 step 7: verify unlocked key matches stored pub_key_base64
   if (!verifyPrivateKeyMatchesPub(privateKey, myPubKeyBase64)) {
     privateKey.fill(0);
     throw new Error('unlocked private key does not match pub_key_base64 — wrong passphrase or corrupted e2ee.json');
   }
 
   try {
-    // Unwrap letter AES key
     const messageId = resolveMessageId(ed);
     const aesKey = unwrapLetterKey(ed.toList, myPubKeyBase64, privateKey, messageId);
-
-    try {
-      // Decrypt fields
-      const subject = safeDecryptField(ed.data.subject, aesKey) ?? '';
-      const bodyPlain = safeDecryptField(ed.data.plainText, aesKey) ?? '';
-      const bodyHtml = safeDecryptField(ed.data.htmlText, aesKey) ?? '';
-      const from = safeDecryptField(ed.data.from, aesKey) ?? '';
-
-      let toList: string[] = [];
-      if (Array.isArray(ed.data.to)) {
-        toList = ed.data.to
-          .map((t) => (typeof t === 'string' ? (safeDecryptField(t, aesKey) ?? t) : String(t)))
-          .filter(Boolean);
-      }
-
-      // Decrypt attachments
-      const attachments: DecryptedAttachment[] = [];
-      if (decryptAttachments) {
-        const rawAttachments = letter.attachments;
-        if (Array.isArray(rawAttachments)) {
-          for (const att of rawAttachments) {
-            if (!att || typeof att !== 'object') continue;
-            const a = att as Record<string, unknown>;
-            const meta: AttachmentMeta = {
-              name: typeof a.name === 'string' ? a.name : undefined,
-              mime: typeof a.mime === 'string' ? a.mime : undefined,
-              size: typeof a.size === 'number' ? a.size : undefined,
-              content_id: typeof a.content_id === 'string' ? a.content_id : undefined,
-            };
-            const encContent =
-              typeof a.encrypted_content_base64 === 'string'
-                ? a.encrypted_content_base64
-                : typeof a.content_base64 === 'string'
-                  ? a.content_base64
-                  : '';
-
-            if (encContent) {
-              try {
-                const decContent = decryptAttachmentCore(encContent, aesKey);
-                attachments.push({
-                  ...meta,
-                  content_base64: decContent.toString('base64'),
-                  decrypt_ok: true,
-                });
-              } catch (err) {
-                attachments.push({
-                  ...meta,
-                  content_base64: '',
-                  decrypt_ok: false,
-                  decrypt_error: err instanceof Error ? err.message : String(err),
-                });
-              }
-            } else {
-              attachments.push({ ...meta, content_base64: '', decrypt_ok: false, decrypt_error: 'no encrypted content' });
-            }
-          }
-        }
-      }
-
-      return {
-        subject,
-        body_plain: bodyPlain,
-        body_html: bodyHtml,
-        from,
-        to: toList,
-        message_id: ed.data.message_id as string || ed.data.messagesID as string || ed.uuid || '',
-        thread_id: typeof letter.thread_id === 'string' ? letter.thread_id : undefined,
-        folder: typeof letter.folder === 'string' ? letter.folder : undefined,
-        decrypted: true,
-        attachments,
-      };
-    } finally {
-      aesKey.fill(0);
-    }
+    return { aesKey, ed, messageId };
   } finally {
     privateKey.fill(0);
   }
 }
 
+// ============================================================
+// Private helpers for decryptSenderInfo / decryptRecipientProfiles / buildAttachmentMetadata
+// ============================================================
+
+function decryptSenderInfo(encrypted: SenderAdditionalInfoEncrypted | undefined, aesKey: Buffer): SenderInfo {
+  const empty: SenderInfo = { display_name: '', avatar_url: '', avatar_base64: '', avatar_color: '', emoji_avatar: '', emoji_status: '' };
+  if (!encrypted?.additionalInfoObject) return empty;
+  const dec = safeDecryptField(encrypted.additionalInfoObject, aesKey);
+  if (!dec) return empty;
+  try {
+    const p = JSON.parse(dec);
+    return {
+      display_name: p.displayName ?? '',
+      avatar_url: p.logoAvatarUrl ?? '',
+      avatar_base64: p.avatarBase64 ?? '',
+      avatar_color: p.avatarColor ?? '',
+      emoji_avatar: p.emojiAvatar ?? '',
+      emoji_status: p.emojiStatus ?? '',
+    };
+  } catch { return empty; }
+}
+
+function decryptRecipientProfiles(encrypted: RecipientAdditionalInfoEncrypted | undefined, aesKey: Buffer): RecipientProfiles {
+  if (!encrypted?.additionalInfoObject) return {};
+  const dec = safeDecryptField(encrypted.additionalInfoObject, aesKey);
+  if (!dec) return {};
+  try {
+    const parsed = JSON.parse(dec);
+    const profiles = parsed.profiles as Record<string, Record<string, unknown>> | undefined;
+    if (!profiles) return {};
+    const result: RecipientProfiles = {};
+    for (const [addr, profile] of Object.entries(profiles)) {
+      result[addr] = {
+        display_name: (profile.displayName as string) ?? '',
+        avatar_url: (profile.logoAvatarUrl as string) ?? '',
+        avatar_base64: (profile.avatarBase64 as string) ?? '',
+        avatar_color: (profile.avatarColor as string) ?? '',
+        emoji_avatar: (profile.emojiAvatar as string) ?? '',
+        emoji_status: (profile.emojiStatus as string) ?? '',
+      };
+    }
+    return result;
+  } catch { return {}; }
+}
+
+function buildAttachmentMetadata(raw: AttachmentMetaEncrypted[] | undefined, aesKey: Buffer): DecryptedAttachment[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  return raw.map(att => ({
+    file_id: att.fileID ?? '',
+    name: safeDecryptField(att.filename, aesKey) ?? '',
+    mime: safeDecryptField(att.contentType, aesKey) ?? '',
+    size: att.size,
+    content_id: att.cid ?? '',
+    content_base64: '',
+    decrypt_ok: false,
+  }));
+}
+
+// ============================================================
+// Phase 2: decrypt all letter fields (does NOT zero aesKey)
+// ============================================================
+
+/** Phase 2: decrypt every field in the letter + attachment metadata + sender/recipient profiles. */
+export function decryptLetterFields(input: DecryptLetterFieldsInput): DecryptedLetter {
+  const { letter, ed, aesKey } = input;
+
+  // Текстовые поля (AES-256-GCM)
+  const subject = safeDecryptField(ed.data.subject, aesKey) ?? '';
+  const bodyPlain = safeDecryptField(ed.data.plainText, aesKey) ?? '';
+  const bodyHtml = safeDecryptField(ed.data.htmlText, aesKey) ?? '';
+  const from = safeDecryptField(ed.data.from, aesKey) ?? '';
+
+  let toList: string[] = [];
+  if (Array.isArray(ed.data.to)) {
+    toList = ed.data.to
+      .map((t) => (typeof t === 'string' ? (safeDecryptField(t, aesKey) ?? t) : String(t)))
+      .filter(Boolean);
+  }
+
+  // Plain поля (прямое чтение)
+  const inReplyTo = typeof ed.data.inReplyTo === 'string' ? ed.data.inReplyTo : '';
+  const references = Array.isArray(ed.data.references)
+    ? ed.data.references.filter((r): r is string => typeof r === 'string')
+    : [];
+  const timestamp = typeof ed.data.timestamp === 'number' ? ed.data.timestamp : 0;
+  const threadId = typeof ed.data.threadID === 'string' ? ed.data.threadID : undefined;
+
+  // Расшифровка профилей
+  const sender = decryptSenderInfo(ed.data.senderAdditionalInfo, aesKey);
+  const recipients = decryptRecipientProfiles(ed.data.recipientAdditionalInfo, aesKey);
+
+  // Attachment metadata (всегда)
+  const attachments = buildAttachmentMetadata(ed.data.attachments, aesKey);
+
+  return {
+    letter_id: typeof letter.letter_id === 'string' ? letter.letter_id : '',
+    subject, body_plain: bodyPlain, body_html: bodyHtml, from, to: toList,
+    message_id: (ed.data.message_id || ed.data.messagesID || ed.uuid || '') as string,
+    thread_id: threadId,
+    folder: typeof letter.folder === 'string' ? letter.folder : undefined,
+    in_reply_to: inReplyTo, references, timestamp, sender, recipients,
+    decrypted: true, attachments,
+  };
+}
+
+// ============================================================
+// Fallback / safe wrapper
+// ============================================================
+
+export const FALLBACK_LETTER: DecryptedLetter = {
+  letter_id: '',
+  subject: '', body_plain: '', body_html: '', from: '', to: [],
+  message_id: '', thread_id: undefined, folder: undefined,
+  in_reply_to: '', references: [], timestamp: 0,
+  sender: { display_name: '', avatar_url: '', avatar_base64: '', avatar_color: '', emoji_avatar: '', emoji_status: '' },
+  recipients: {},
+  decrypted: false,
+  attachments: [],
+};
+
 /**
  * Try to decrypt but return a partial result on failure (per failure matrix).
  * Never throws — always returns a DecryptedLetter.
+ * Wrapper over deriveLetterAesKey + decryptLetterFields. Zeroes aesKey in finally.
  */
 export function safeDecryptLetter(input: DecryptLetterInput): DecryptedLetter {
+  const { letter, myPubKeyBase64, encPrivKeyBase64, pbkdf2SaltBase64, pbkdf2Iterations, passphrase } = input;
+  let aesKey: Buffer | null = null;
   try {
-    return decryptLetter(input);
+    const derived = deriveLetterAesKey(letter, myPubKeyBase64, encPrivKeyBase64, pbkdf2SaltBase64, pbkdf2Iterations, passphrase);
+    aesKey = derived.aesKey;
+    return decryptLetterFields({ letter, ed: derived.ed, aesKey });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    // If the error mentions toList/missing pub, mark as encrypted-not-decryptable
     if (errMsg.includes('not found in toList')) {
-      return {
-        subject: '',
-        body_plain: '',
-        body_html: '',
-        from: '',
-        to: [],
-        message_id: '',
-        decrypted: false,
-        decrypt_error: 'encrypted-not-decryptable-for-this-identity — my pub key not in toList',
-        attachments: [],
-      };
+      return { ...FALLBACK_LETTER, decrypt_error: 'encrypted-not-decryptable-for-this-identity — my pub key not in toList' };
     }
-    return {
-      subject: '',
-      body_plain: '',
-      body_html: '',
-      from: '',
-      to: [],
-      message_id: '',
-      decrypted: false,
-      decrypt_error: errMsg,
-      attachments: [],
-    };
+    return { ...FALLBACK_LETTER, decrypt_error: errMsg };
+  } finally {
+    if (aesKey) aesKey.fill(0);
   }
 }

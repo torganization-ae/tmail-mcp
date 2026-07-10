@@ -34,6 +34,8 @@ export const toolInputSchemas: Record<string, z.ZodRawShape> = {
     is_draft: z.boolean().optional(),
     as_seceml: z.boolean().optional(),
     mark_read: z.boolean().optional(),
+    offset: z.number().optional().describe('Client-side pagination: skip this many letters (default 0). The API returns the whole thread; MCP slices results[] to the requested window.'),
+    limit: z.number().optional().describe('Client-side pagination: max letters to return (default all). Use to walk long threads in bounded chunks.'),
   },
   tmail_send_letter: {
     ...walletSelectorSchema,

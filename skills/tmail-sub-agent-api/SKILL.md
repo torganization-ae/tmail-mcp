@@ -16,7 +16,7 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). MCP tool 
 | `tmail_list_mailboxes` | `POST /api/tbox/mailboxes` |
 | `tmail_get_limits` | `GET /api/tbox/limits` |
 | `tmail_list_threads` | `POST /api/tbox/threads` |
-| `tmail_fetch_thread` | `POST /api/tbox/threads/letters` |
+| `tmail_fetch_thread` | `POST /api/tbox/threads/letters` — MCP adds client-side `offset`/`limit` paging |
 | `tmail_send_letter` | `POST /api/tbox/letters` |
 | `tmail_generate_payload` | `POST /api/auth/generate-payload` |
 | `tmail_sub_bind` | `POST /api/subacc/auth/bind` |
@@ -231,6 +231,8 @@ Example response (placeholders — copy exact API strings):
 
 → `{ "message_id", "accepted", "encryption?": { "sender_e2e", "fully_e2e", "e2e_recipients", … } }`
 
+**MCP-side validation (before API call):** without `eml_base64`, MCP rejects early if `to`/`to_list` is empty or both `body_html`/`body_plain` are empty; `attachments_json` (if set) must parse as a JSON array.
+
 **After success:** when `
 Rules: max 10 recipients, 10 attachments, 25 MB total. Async delivery.
 
@@ -267,17 +269,21 @@ Folder: `inbox`, `sent`, `spam`, or empty (all except UNSEEN-only logic). Max li
 
 ### POST `/api/tbox/threads/letters` — `mail:read` (fetch whole thread)
 
+MCP applies client-side pagination over the full thread response: `offset`/`limit` are optional (default returns all letters). Response adds `total`, `offset`, `limit`, `has_more`.
+
 ```json
 {
   "mailbox": "",
   "thread_id": "<uuid>",
   "is_draft": false,
   "as_seceml": true,
-  "mark_read": true
+  "mark_read": true,
+  "offset": 0,
+  "limit": 0
 }
 ```
 
-→ `{ "thread_id", "is_draft", "letter_ids", "results": [{ "letter_id", "seceml_base64?", "encrypted_data?", "error?" }], "failed_letter_ids?" }`
+→ `{ "thread_id", "is_draft", "letter_ids", "results": [{ "letter_id", "seceml_base64?", "encrypted_data?", "error?" }], "failed_letter_ids?", "total", "offset", "limit", "has_more" }`
 
 **Cache (when `
 ### POST `/api/tbox/letters/fetch` — `mail:read` (fetch by IDs)

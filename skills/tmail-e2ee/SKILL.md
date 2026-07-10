@@ -118,8 +118,10 @@ If pub mismatch: reject profile as corrupted/wrong passphrase.
 
 ```http
 POST /api/tbox/threads/letters
-{ "thread_id": "<id>", "as_seceml": true }
+{ "thread_id": "<id>", "as_seceml": true, "offset": 0, "limit": 0 }
 ```
+
+`offset`/`limit` are optional MCP-side paging params (default `0` = all letters). Use for long threads.
 
 `seceml_base64` decodes to binary format:
 

@@ -1,6 +1,6 @@
 ---
 name: tmail-read-mail
-description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). Read inbox via tmail_list_threads / tmail_fetch_thread — live API only."
+description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). Read inbox via tmail_list_threads / tmail_fetch_thread (supports offset/limit paging) — live API only."
 ---
 
 # Read Mail (MCP-first)
@@ -30,7 +30,7 @@ description: "BLOCKED until Env Gate + Ready §10 (tmail-agent-setup). Read inbo
 
 0. **On tool error** — follow actionable message (env / bind / e2ee / wallet_slug). See **tmail-agent-setup → API timing**.
 1. List candidates via **`tmail_list_threads`** or folder view via **`tmail_list_folders`** (or direct IDs from caller).
-2. Fetch via **`tmail_fetch_thread`** or bulk **`tmail_fetch_letters`** (`mark_read` as needed; API default true when omitted).
+2. Fetch via **`tmail_fetch_thread`** (optional `offset`/`limit` for long threads — default returns all letters) or bulk **`tmail_fetch_letters`** (`mark_read` as needed; API default true when omitted).
 3. If encrypted, decrypt using **tmail-e2ee → Protocol steps 1–6**.
 4. Return decrypted or encrypted result in memory — **do not** write mail to disk.
 5. Mark thread seen via **`tmail_mark_threads_seen`** per table below.
@@ -76,7 +76,7 @@ flowchart TD
 |------|-----|
 | Folder counts | `POST /api/tbox/folders` |
 | Inbox list | `POST /api/tbox/threads` |
-| Open thread | `POST /api/tbox/threads/letters` |
+| Open thread | `POST /api/tbox/threads/letters` — optional `offset`/`limit` for paging (`total`/`has_more` in response) |
 | Open letter(s) | `POST /api/tbox/letters/fetch` |
 | Mark read | `POST /api/tbox/threads/seen` |
 | E2EE body | fetch with `as_seceml: true` + decrypt |
@@ -104,13 +104,37 @@ Use `preview` from thread metadata or `include_last_letter: true` for snippet.
 
 ## Fetch thread (preferred for conversation)
 
+`tmail_fetch_thread` returns all letters in a thread by default. For long threads (backend caps a thread at 100 letters, delivered in one API round-trip), pass `offset`/`limit` to page through them in bounded chunks instead of receiving the whole thread at once.
+
+**Defaults:** `offset=0`, `limit=0` (0 = return all). When both are omitted, the full thread is returned exactly as before — no behavioral change for existing callers.
+
+**Response adds pagination metadata:**
+
+| Field | Meaning |
+|---|---|
+| `total` | Total letters in the thread (before slicing) |
+| `offset` | Offset applied to this response (echoes request, default 0) |
+| `limit` | Limit applied (echoes request; 0 = all) |
+| `has_more` | `true` when letters exist beyond the current page |
+
+**Walk a long thread:**
+
+```text
+offset=0, limit=20  → has_more=true  → offset=20, limit=20 → ...
+offset=0, limit=20  → has_more=false → done
+```
+
+`letter_ids[]` is sliced in lockstep with `results[]` (same index window), so consumers that key off `letter_ids` stay in sync with the page.
+
 ```http
 POST /api/tbox/threads/letters
 
 {
   "thread_id": "<uuid>",
   "as_seceml": true,
-  "mark_read": true
+  "mark_read": true,
+  "offset": 0,
+  "limit": 20
 }
 ```
 

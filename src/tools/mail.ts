@@ -58,7 +58,56 @@ export async function fetchThread(rt: Runtime, args: Record<string, unknown>) {
   };
   if (typeof args.mark_read === 'boolean') body.mark_read = args.mark_read;
   const out = await rt.client.post<Record<string, unknown>>('/api/tbox/threads/letters', body);
-  return textResult(sanitizeForTool('tmail_fetch_thread', out));
+
+  const offset = Math.max(0, optionalInt(args, 'offset', 0));
+  const requestedLimit = Math.max(0, optionalInt(args, 'limit', 0));
+  const paginated = paginateThread(out, offset, requestedLimit);
+  return textResult(sanitizeForTool('tmail_fetch_thread', paginated));
+}
+
+// Slice the full-thread response to the requested page without extra API round-trips.
+// The backend returns the whole thread (capped at 100 letters) in one shot; we apply
+// offset/limit on the client so the agent can walk long threads in bounded chunks.
+function paginateThread(
+  out: Record<string, unknown>,
+  offset: number,
+  requestedLimit: number,
+): Record<string, unknown> {
+  const rawResults = (out.results ?? out.letters) as Array<Record<string, unknown>> | undefined;
+  const results: Array<Record<string, unknown>> = Array.isArray(rawResults) ? rawResults : [];
+  const allLetterIds = Array.isArray(out.letter_ids)
+    ? (out.letter_ids as unknown[]).filter((id): id is string => typeof id === 'string')
+    : [];
+
+  const total = results.length;
+  if (offset >= total) {
+    return {
+      ...out,
+      results: [],
+      letter_ids: [],
+      total,
+      offset,
+      limit: requestedLimit,
+      has_more: false,
+    };
+  }
+
+  const end = requestedLimit > 0 ? Math.min(offset + requestedLimit, total) : total;
+  const page = results.slice(offset, end);
+  // letter_ids mirrors results[] by index; slice the same window so consumers stay in sync.
+  const pageIds = allLetterIds.length === total
+    ? allLetterIds.slice(offset, end)
+    : page.map((r) => (typeof r.letter_id === 'string' ? r.letter_id : ''));
+
+  return {
+    ...out,
+    results: page,
+    letter_ids: pageIds,
+    total,
+    offset,
+    limit: requestedLimit,
+    has_more: end < total,
+  };
 }
 
 export async function sendLetter(rt: Runtime, args: Record<string, unknown>) {
@@ -66,18 +115,44 @@ export async function sendLetter(rt: Runtime, args: Record<string, unknown>) {
   const body: Record<string, unknown> = {};
   const from = optionalString(args, 'from_address');
   if (from) body.from_address = from;
-  const to = optionalString(args, 'to');
-  if (to) body.to = [to];
+
+  // Collect recipients from `to` (single) and `to_list` (array); to_list wins if non-empty.
+  let recipients: string[] = [];
+  const toSingle = optionalString(args, 'to');
+  if (toSingle) recipients.push(toSingle);
   try {
     const toList = requireStringArray(args, 'to_list');
-    if (toList.length) body.to = toList;
+    if (toList.length) recipients = toList;
   } catch {
-    // optional
+    // to_list is optional
   }
-  for (const k of ['subject', 'body_html', 'body_plain', 'in_reply_to', 'thread_id', 'eml_base64'] as const) {
-    const v = optionalString(args, k);
-    if (v) body[k] = v;
+
+  const emlBase64 = optionalString(args, 'eml_base64');
+  const subject = optionalString(args, 'subject');
+  const bodyHtml = optionalString(args, 'body_html');
+  const bodyPlain = optionalString(args, 'body_plain');
+  const inReplyTo = optionalString(args, 'in_reply_to');
+  const threadId = optionalString(args, 'thread_id');
+
+  // Early validation mirrors backend 422s so the agent gets a readable error
+  // without a wasted round-trip. EML path bypasses field-level requirements.
+  if (emlBase64) {
+    body.eml_base64 = emlBase64;
+    // Backend ignores structured letter fields when eml_base64 is set — do not send them.
+  } else {
+    if (recipients.length === 0) {
+      return textError('to or to_list is required when eml_base64 is not provided');
+    }
+    if (!bodyHtml && !bodyPlain) {
+      return textError('body_html or body_plain is required when eml_base64 is not provided');
+    }
+    if (subject) body.subject = subject;
+    if (bodyHtml) body.body_html = bodyHtml;
+    if (bodyPlain) body.body_plain = bodyPlain;
   }
+  if (recipients.length) body.to = recipients;
+  if (inReplyTo) body.in_reply_to = inReplyTo;
+  if (threadId) body.thread_id = threadId;
   if (optionalBool(args, 'report_encryption')) body.report_encryption = true;
   const attRaw = optionalString(args, 'attachments_json');
   if (attRaw) {
